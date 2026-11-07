@@ -12,6 +12,9 @@ import { colors } from "@/lib/theme";
 import type { Plan } from "@/lib/types";
 import { ProgressHeader } from "@/components/ProgressHeader";
 import { Button, Screen } from "@/components/ui";
+import { Landing } from "@/components/Landing";
+
+let landingSeen = false; // module-level: show the landing once per app session, not on every return to "/"
 
 type ResumeMode = "pdf" | "text";
 interface PickedPdf { name: string; base64: string }
@@ -20,6 +23,7 @@ const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
 export default function UploadScreen() {
   const settings = useSettings();
+  const [started, setStarted] = useState(landingSeen);
   const [mode, setMode] = useState<ResumeMode>("pdf");
   const [pdf, setPdf] = useState<PickedPdf | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -83,6 +87,8 @@ export default function UploadScreen() {
       setDemoLoading(false);
     }
   }
+
+  if (!started) return <Landing onContinue={() => { landingSeen = true; setStarted(true); }} />;
 
   return (
     <KeyboardAvoidingView className="flex-1 bg-ink" behavior={Platform.OS === "ios" ? "padding" : undefined}>
