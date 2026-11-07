@@ -1,4 +1,5 @@
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
+import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { pixelColors as c, pixelFont as pixel } from "@/lib/theme";
@@ -15,9 +16,8 @@ const dots: [number, number, string][] = [
   [78, 88, "#FFFFFF"],
 ];
 
-export function Landing({ onContinue }: { onContinue: () => void }) {
-  const [loaded] = useFonts({ Jersey25_400Regular });
-
+/** grass background with pixel flowers, shared by the landing and loading screens. */
+export function PixelBackground({ children }: { children: ReactNode }) {
   return (
     <SafeAreaView
       className="flex-1"
@@ -38,7 +38,16 @@ export function Landing({ onContinue }: { onContinue: () => void }) {
           />
         ))}
       </View>
+      {children}
+    </SafeAreaView>
+  );
+}
 
+export function Landing({ onContinue }: { onContinue: () => void }) {
+  const [loaded] = useFonts({ Jersey25_400Regular });
+
+  return (
+    <PixelBackground>
       {loaded && (
         <View className="w-full max-w-[480px] flex-1 items-center justify-center self-center px-6">
           <Text
@@ -125,6 +134,6 @@ export function Landing({ onContinue }: { onContinue: () => void }) {
           </Pressable>
         </View>
       )}
-    </SafeAreaView>
+    </PixelBackground>
   );
 }

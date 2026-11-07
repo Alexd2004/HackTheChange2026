@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { createPlan, takePendingPlanInput } from "@/lib/api";
 import type { CreatePlanInput } from "@/lib/types";
-import { ErrorState, LoadingState, Screen } from "@/components/ui";
+import { ErrorState, Screen } from "@/components/ui";
+import { PixelBackground } from "@/components/Landing";
+import { pixelColors as c, pixelFont } from "@/lib/theme";
+import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
+
+const TILES = 10;
 
 const STEPS = [
   "Reading your resume…",
@@ -48,16 +53,61 @@ export default function BuildingScreen() {
     return () => clearInterval(t);
   }, [error]);
 
-  return (
-    <Screen scroll={false}>
-      {error ? (
+  const [fontLoaded] = useFonts({ Jersey25_400Regular });
+
+  if (error) {
+    return (
+      <Screen scroll={false}>
         <ErrorState message={error} onRetry={run} onBack={() => router.replace("/")} />
-      ) : (
-        <View className="flex-1 justify-center">
-          <LoadingState message={STEPS[step]} />
-          <Text className="text-center text-sm text-muted">This takes about 15 seconds.</Text>
+      </Screen>
+    );
+  }
+
+  const filled = Math.round(((step + 1) / STEPS.length) * TILES);
+
+  return (
+    <PixelBackground>
+      {fontLoaded && (
+        <View className="w-full max-w-[480px] flex-1 items-center justify-center self-center px-6">
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{
+              fontFamily: pixelFont,
+              fontSize: 32,
+              lineHeight: 36,
+              color: "#FFFFFF",
+              textAlign: "center",
+              textShadowColor: c.outline,
+              textShadowOffset: { width: 3, height: 3 },
+              textShadowRadius: 0,
+            }}>
+            {STEPS[step]}
+          </Text>
+
+          <View
+            accessibilityRole="progressbar"
+            accessibilityValue={{ min: 0, max: TILES, now: filled }}
+            className="mt-8 w-full flex-row gap-1 p-1"
+            style={{
+              backgroundColor: c.parchment,
+              borderWidth: 4,
+              borderColor: c.outline,
+              boxShadow: `6px 6px 0 ${c.outline}`,
+            }}>
+            {Array.from({ length: TILES }, (_, i) => (
+              <View
+                key={i}
+                className="flex-1 aspect-square"
+                style={{ backgroundColor: i < filled ? c.gold : "transparent" }}
+              />
+            ))}
+          </View>
+
+          <Text style={{ fontFamily: pixelFont, fontSize: 20, color: c.cream, marginTop: 24 }}>
+            This takes about 15 seconds.
+          </Text>
         </View>
       )}
-    </Screen>
+    </PixelBackground>
   );
 }
