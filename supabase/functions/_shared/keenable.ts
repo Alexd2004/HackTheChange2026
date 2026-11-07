@@ -15,7 +15,8 @@ export async function searchResources(query: string, keep = 3): Promise<FoundRes
     return [];
   }
   try {
-    const url = `https://api.keenable.ai/v1/search?query=${encodeURIComponent(query)}&count=5`;
+    // Keenable takes `max_results` (not `count`; unknown parameters are rejected with a 400).
+    const url = `https://api.keenable.ai/v1/search?query=${encodeURIComponent(query)}&max_results=5&snippet_max_length=300`;
     const res = await fetch(url, {
       headers: { "X-API-Key": API_KEY },
       signal: AbortSignal.timeout(8000),
@@ -24,15 +25,14 @@ export async function searchResources(query: string, keep = 3): Promise<FoundRes
       console.warn("Keenable HTTP", res.status, await res.text());
       return [];
     }
+    // Response: { results: [{ title, url, description, snippet, ... }] }. `description` is often empty.
     const body = await res.json();
-    // Accept the common response shapes; confirm against docs.keenable.ai with one curl.
-    const items: Record<string, unknown>[] =
-      body?.results ?? body?.data ?? body?.items ?? (Array.isArray(body) ? body : []);
+    const items: Record<string, unknown>[] = Array.isArray(body?.results) ? body.results : [];
     return items
       .map((r) => ({
-        title: String(r.title ?? r.name ?? "").trim(),
-        url: String(r.url ?? r.link ?? "").trim(),
-        snippet: String(r.snippet ?? r.description ?? r.content ?? "").trim().slice(0, 300),
+        title: String(r.title ?? "").trim(),
+        url: String(r.url ?? "").trim(),
+        snippet: String(r.description || r.snippet || "").replace(/\s+/g, " ").trim().slice(0, 300),
       }))
       .filter((r) => r.title && /^https?:\/\//.test(r.url))
       .slice(0, keep);
