@@ -46,3 +46,6 @@ example
 .env
 # Supabase CLI local link cache
 supabase/.temp/
+
+# Planning docs and reports (shared directly, not committed)
+docs/
