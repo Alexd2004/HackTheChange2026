@@ -3,6 +3,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { getPlanBundle } from "@/lib/api";
+import { setCurrentPlan } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 import type { PlanBundle, StageWithLevels } from "@/lib/types";
 import { LevelNode, NODE_SIZE } from "@/components/LevelNode";
@@ -21,7 +22,10 @@ export default function MapScreen() {
   const load = useCallback(() => {
     setError(null);
     getPlanBundle(id)
-      .then(setBundle)
+      .then((b) => {
+        setBundle(b);
+        setCurrentPlan(b.plan.id); // remembered on the profile for "Continue"
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load your map."));
   }, [id]);
 
