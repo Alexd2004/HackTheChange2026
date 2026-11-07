@@ -1,0 +1,289 @@
+{
+  "plan": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "job_title": "Junior Software Developer",
+    "company": "Prairie Labs (demo)",
+    "match_pct": 30,
+    "start_match_pct": 30,
+    "xp": 0,
+    "created_at": "2026-11-07T12:00:00.000Z"
+  },
+  "skills": [
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "name": "SQL",
+      "weight": 3,
+      "required": true,
+      "have_level": 0,
+      "need_level": 2,
+      "is_gap": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "name": "REST APIs",
+      "weight": 2,
+      "required": true,
+      "have_level": 1,
+      "need_level": 2,
+      "is_gap": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "name": "Git",
+      "weight": 2,
+      "required": false,
+      "have_level": 1,
+      "need_level": 2,
+      "is_gap": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000014",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "name": "JavaScript",
+      "weight": 2,
+      "required": true,
+      "have_level": 2,
+      "need_level": 2,
+      "is_gap": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000015",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "name": "Communication",
+      "weight": 1,
+      "required": false,
+      "have_level": 2,
+      "need_level": 1,
+      "is_gap": false
+    }
+  ],
+  "stages": [
+    {
+      "id": "00000000-0000-4000-8000-000000000021",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "skill_id": "00000000-0000-4000-8000-000000000011",
+      "idx": 0,
+      "title": "Query the Database",
+      "summary": "Read real data with SELECT, JOIN and GROUP BY.",
+      "levels": [
+        {
+          "id": "00000000-0000-4000-8000-000000000101",
+          "stage_id": "00000000-0000-4000-8000-000000000021",
+          "idx": 0,
+          "type": "normal",
+          "title": "SELECT basics",
+          "objective": "Pick columns and filter rows from one table.",
+          "concepts": [
+            "SELECT",
+            "WHERE",
+            "ORDER BY"
+          ],
+          "status": "unlocked",
+          "best_score": null,
+          "generated": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000102",
+          "stage_id": "00000000-0000-4000-8000-000000000021",
+          "idx": 1,
+          "type": "normal",
+          "title": "Joining tables",
+          "objective": "Combine rows from two related tables.",
+          "concepts": [
+            "INNER JOIN",
+            "LEFT JOIN",
+            "foreign keys"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000103",
+          "stage_id": "00000000-0000-4000-8000-000000000021",
+          "idx": 2,
+          "type": "challenge",
+          "title": "Aggregates under pressure",
+          "objective": "Summarize data with groups and counts, against the clock.",
+          "concepts": [
+            "GROUP BY",
+            "COUNT",
+            "HAVING"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000104",
+          "stage_id": "00000000-0000-4000-8000-000000000021",
+          "idx": 3,
+          "type": "boss",
+          "title": "The Query Golem",
+          "objective": "Mix every query skill from this stage to beat the boss.",
+          "concepts": [
+            "WHERE",
+            "JOIN",
+            "GROUP BY",
+            "HAVING"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": true
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000022",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "skill_id": "00000000-0000-4000-8000-000000000012",
+      "idx": 1,
+      "title": "Talk to Servers",
+      "summary": "Call and design REST endpoints with the right methods and status codes.",
+      "levels": [
+        {
+          "id": "00000000-0000-4000-8000-000000000105",
+          "stage_id": "00000000-0000-4000-8000-000000000022",
+          "idx": 0,
+          "type": "normal",
+          "title": "HTTP methods",
+          "objective": "Match GET, POST, PUT and DELETE to what they do.",
+          "concepts": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000106",
+          "stage_id": "00000000-0000-4000-8000-000000000022",
+          "idx": 1,
+          "type": "normal",
+          "title": "Status codes",
+          "objective": "Read what a server is telling you.",
+          "concepts": [
+            "2xx",
+            "4xx",
+            "5xx"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000107",
+          "stage_id": "00000000-0000-4000-8000-000000000022",
+          "idx": 2,
+          "type": "challenge",
+          "title": "Request anatomy",
+          "objective": "Headers, bodies and query strings at speed.",
+          "concepts": [
+            "headers",
+            "JSON body",
+            "query params"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000108",
+          "stage_id": "00000000-0000-4000-8000-000000000022",
+          "idx": 3,
+          "type": "boss",
+          "title": "The Endpoint Hydra",
+          "objective": "Design and debug a small REST API.",
+          "concepts": [
+            "methods",
+            "status codes",
+            "JSON body"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000023",
+      "plan_id": "00000000-0000-4000-8000-000000000001",
+      "skill_id": "00000000-0000-4000-8000-000000000013",
+      "idx": 2,
+      "title": "Version Control Basics",
+      "summary": "Save, share and fix your work with Git.",
+      "levels": [
+        {
+          "id": "00000000-0000-4000-8000-000000000109",
+          "stage_id": "00000000-0000-4000-8000-000000000023",
+          "idx": 0,
+          "type": "normal",
+          "title": "Commits",
+          "objective": "Stage and commit changes with clear messages.",
+          "concepts": [
+            "git add",
+            "git commit",
+            "git status"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000110",
+          "stage_id": "00000000-0000-4000-8000-000000000023",
+          "idx": 1,
+          "type": "normal",
+          "title": "Branches",
+          "objective": "Work on features without breaking main.",
+          "concepts": [
+            "git branch",
+            "git switch",
+            "git merge"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000111",
+          "stage_id": "00000000-0000-4000-8000-000000000023",
+          "idx": 2,
+          "type": "challenge",
+          "title": "Remotes",
+          "objective": "Push, pull and fetch under time pressure.",
+          "concepts": [
+            "git push",
+            "git pull",
+            "git fetch"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000112",
+          "stage_id": "00000000-0000-4000-8000-000000000023",
+          "idx": 3,
+          "type": "boss",
+          "title": "The Merge Conflict Dragon",
+          "objective": "Resolve conflicts and recover from mistakes.",
+          "concepts": [
+            "merge conflicts",
+            "git log",
+            "git restore"
+          ],
+          "status": "locked",
+          "best_score": null,
+          "generated": false
+        }
+      ]
+    }
+  ]
+}

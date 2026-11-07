@@ -1,0 +1,496 @@
+{
+  "00000000-0000-4000-8000-000000000101": {
+    "questions": [
+      {
+        "id": "00000000-0000-4000-8000-000000001001",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "idx": 0,
+        "kind": "mcq",
+        "prompt": "Which statement returns every column from the table `users`?",
+        "options": [
+          "SELECT * FROM users;",
+          "GET * FROM users;",
+          "SELECT users;",
+          "READ ALL users;"
+        ],
+        "correct_index": 0,
+        "answers": null,
+        "explanation": "SELECT * means all columns; FROM names the table.",
+        "concept": "SELECT",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001002",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "idx": 1,
+        "kind": "blank",
+        "prompt": "Complete the query to keep only users older than 30: SELECT name FROM users ____ age > 30;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "WHERE"
+        ],
+        "explanation": "WHERE filters rows before they are returned.",
+        "concept": "WHERE",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001003",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "idx": 2,
+        "kind": "mcq",
+        "prompt": "How do you sort results from newest to oldest by `created_at`?",
+        "options": [
+          "SORT created_at DOWN",
+          "ORDER created_at",
+          "ORDER BY created_at DESC",
+          "GROUP BY created_at DESC"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "ORDER BY sorts; DESC means descending (newest first for dates).",
+        "concept": "ORDER BY",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001004",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "idx": 3,
+        "kind": "mcq",
+        "prompt": "Which WHERE clause finds users whose city is Calgary?",
+        "options": [
+          "WHERE city == Calgary",
+          "WHERE city = 'Calgary'",
+          "WHERE city IS Calgary",
+          "IF city = 'Calgary'"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "Text values go in single quotes, and SQL compares with a single =.",
+        "concept": "WHERE",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001005",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "idx": 4,
+        "kind": "blank",
+        "prompt": "To return at most 10 rows, end the query with ____ 10.",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "LIMIT"
+        ],
+        "explanation": "LIMIT caps how many rows come back (Postgres, MySQL, SQLite).",
+        "concept": "SELECT",
+        "difficulty": 2
+      }
+    ],
+    "resources": [
+      {
+        "id": "00000000-0000-4000-8000-000000002001",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "title": "SQLBolt: SELECT queries",
+        "url": "https://sqlbolt.com/lesson/select_queries_introduction",
+        "snippet": "Interactive lesson: pick columns from a table."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002002",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "title": "W3Schools: SQL WHERE clause",
+        "url": "https://www.w3schools.com/sql/sql_where.asp",
+        "snippet": "Filter rows with WHERE and comparison operators."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002003",
+        "level_id": "00000000-0000-4000-8000-000000000101",
+        "title": "PostgreSQL tutorial: Querying a table",
+        "url": "https://www.postgresql.org/docs/current/tutorial-select.html",
+        "snippet": "Official intro to SELECT, WHERE and ORDER BY."
+      }
+    ]
+  },
+  "00000000-0000-4000-8000-000000000102": {
+    "questions": [
+      {
+        "id": "00000000-0000-4000-8000-000000001006",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "idx": 0,
+        "kind": "mcq",
+        "prompt": "An INNER JOIN between `orders` and `customers` returns…",
+        "options": [
+          "Every row from both tables",
+          "Only rows that match in both tables",
+          "Only customers with no orders",
+          "Only the first table"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "INNER JOIN keeps only pairs where the join condition is true.",
+        "concept": "INNER JOIN",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001007",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "idx": 1,
+        "kind": "mcq",
+        "prompt": "You want every customer, even ones with no orders. Which join?",
+        "options": [
+          "customers LEFT JOIN orders",
+          "customers INNER JOIN orders",
+          "orders INNER JOIN customers",
+          "customers CROSS JOIN orders"
+        ],
+        "correct_index": 0,
+        "answers": null,
+        "explanation": "LEFT JOIN keeps every row from the left table and fills missing matches with NULL.",
+        "concept": "LEFT JOIN",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001008",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "idx": 2,
+        "kind": "blank",
+        "prompt": "Complete the join: SELECT * FROM orders o JOIN customers c ____ o.customer_id = c.id;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "ON"
+        ],
+        "explanation": "ON gives the condition that links the two tables.",
+        "concept": "INNER JOIN",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001009",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "idx": 3,
+        "kind": "mcq",
+        "prompt": "`orders.customer_id` points at `customers.id`. What is `customer_id`?",
+        "options": [
+          "A primary key",
+          "An index name",
+          "A foreign key",
+          "A view"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "A foreign key stores the id of a row in another table.",
+        "concept": "foreign keys",
+        "difficulty": 1
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001010",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "idx": 4,
+        "kind": "mcq",
+        "prompt": "After a LEFT JOIN, a customer with no orders shows what in the order columns?",
+        "options": [
+          "0",
+          "NULL",
+          "An empty string",
+          "The row is removed"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "Missing matches in a LEFT JOIN are filled with NULL.",
+        "concept": "LEFT JOIN",
+        "difficulty": 2
+      }
+    ],
+    "resources": [
+      {
+        "id": "00000000-0000-4000-8000-000000002004",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "title": "SQLBolt: Multi-table queries with JOINs",
+        "url": "https://sqlbolt.com/lesson/select_queries_with_joins",
+        "snippet": "Interactive lesson on INNER JOIN."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002005",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "title": "W3Schools: SQL joins",
+        "url": "https://www.w3schools.com/sql/sql_join.asp",
+        "snippet": "Diagrams of INNER, LEFT, RIGHT and FULL joins."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002006",
+        "level_id": "00000000-0000-4000-8000-000000000102",
+        "title": "PostgreSQL tutorial: Joins between tables",
+        "url": "https://www.postgresql.org/docs/current/tutorial-join.html",
+        "snippet": "Official walkthrough of joins and outer joins."
+      }
+    ]
+  },
+  "00000000-0000-4000-8000-000000000103": {
+    "questions": [
+      {
+        "id": "00000000-0000-4000-8000-000000001011",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 0,
+        "kind": "mcq",
+        "prompt": "Which query counts orders per customer?",
+        "options": [
+          "SELECT COUNT(customer_id) FROM orders;",
+          "SELECT customer_id FROM orders ORDER BY COUNT;",
+          "SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id;",
+          "SELECT * FROM orders GROUP customer_id;"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "GROUP BY makes one group per customer, and COUNT(*) counts the rows in each group.",
+        "concept": "GROUP BY",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001012",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 1,
+        "kind": "blank",
+        "prompt": "Keep only groups with more than 5 orders: … GROUP BY customer_id ____ COUNT(*) > 5;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "HAVING"
+        ],
+        "explanation": "HAVING filters groups after aggregation; WHERE filters rows before it.",
+        "concept": "HAVING",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001013",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 2,
+        "kind": "mcq",
+        "prompt": "Why does `WHERE COUNT(*) > 5` fail?",
+        "options": [
+          "WHERE runs before rows are grouped",
+          "COUNT needs a column name",
+          "5 must be quoted",
+          "WHERE only works with text"
+        ],
+        "correct_index": 0,
+        "answers": null,
+        "explanation": "Aggregates don't exist yet when WHERE runs, so use HAVING.",
+        "concept": "HAVING",
+        "difficulty": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001014",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 3,
+        "kind": "blank",
+        "prompt": "The function that adds up a numeric column is ____( ).",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "SUM"
+        ],
+        "explanation": "SUM adds values; COUNT counts rows; AVG averages.",
+        "concept": "COUNT",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001015",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 4,
+        "kind": "mcq",
+        "prompt": "What does COUNT(email) skip that COUNT(*) does not?",
+        "options": [
+          "Duplicate emails",
+          "Rows with long emails",
+          "Rows where email is NULL",
+          "Nothing, they are the same"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "COUNT(column) ignores NULLs; COUNT(*) counts every row.",
+        "concept": "COUNT",
+        "difficulty": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001016",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "idx": 5,
+        "kind": "mcq",
+        "prompt": "Every column in SELECT must be either aggregated or…",
+        "options": [
+          "Listed in ORDER BY",
+          "Listed in GROUP BY",
+          "A primary key",
+          "Indexed"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "Non-aggregated columns must be grouped, or the database can't pick a single value.",
+        "concept": "GROUP BY",
+        "difficulty": 2
+      }
+    ],
+    "resources": [
+      {
+        "id": "00000000-0000-4000-8000-000000002007",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "title": "SQLBolt: Queries with aggregates",
+        "url": "https://sqlbolt.com/lesson/select_queries_with_aggregates",
+        "snippet": "GROUP BY and aggregate functions."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002008",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "title": "W3Schools: SQL HAVING",
+        "url": "https://www.w3schools.com/sql/sql_having.asp",
+        "snippet": "Filter groups after aggregation."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000002009",
+        "level_id": "00000000-0000-4000-8000-000000000103",
+        "title": "PostgreSQL tutorial: Aggregate functions",
+        "url": "https://www.postgresql.org/docs/current/tutorial-agg.html",
+        "snippet": "Official intro to COUNT, SUM, GROUP BY and HAVING."
+      }
+    ]
+  },
+  "00000000-0000-4000-8000-000000000104": {
+    "questions": [
+      {
+        "id": "00000000-0000-4000-8000-000000001017",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 0,
+        "kind": "mcq",
+        "prompt": "A manager wants Calgary customers who placed more than 3 orders. Which clause filters the city?",
+        "options": [
+          "HAVING city = 'Calgary'",
+          "GROUP BY 'Calgary'",
+          "ORDER BY city",
+          "WHERE city = 'Calgary'"
+        ],
+        "correct_index": 3,
+        "answers": null,
+        "explanation": "Filter plain rows with WHERE, before grouping.",
+        "concept": "WHERE",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001018",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 1,
+        "kind": "blank",
+        "prompt": "…and the 'more than 3 orders' part uses ____ COUNT(*) > 3.",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "HAVING"
+        ],
+        "explanation": "Conditions on aggregates go in HAVING.",
+        "concept": "HAVING",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001019",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 2,
+        "kind": "mcq",
+        "prompt": "To show customer names next to their order totals you need…",
+        "options": [
+          "Two separate SELECTs",
+          "A JOIN between customers and orders",
+          "A UNION",
+          "A subquery in ORDER BY"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "Names live in customers and totals in orders, so JOIN them.",
+        "concept": "JOIN",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001020",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 3,
+        "kind": "mcq",
+        "prompt": "A report is missing customers who never ordered. What changed fixes it?",
+        "options": [
+          "Switch INNER JOIN to LEFT JOIN from customers",
+          "Add ORDER BY",
+          "Add LIMIT",
+          "Remove GROUP BY"
+        ],
+        "correct_index": 0,
+        "answers": null,
+        "explanation": "LEFT JOIN keeps customers with zero matching orders.",
+        "concept": "JOIN",
+        "difficulty": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001021",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 4,
+        "kind": "blank",
+        "prompt": "Total revenue per product: SELECT product_id, ____(price) FROM order_items GROUP BY product_id;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "SUM"
+        ],
+        "explanation": "SUM adds every price in the group.",
+        "concept": "GROUP BY",
+        "difficulty": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001022",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 5,
+        "kind": "mcq",
+        "prompt": "Which runs first when the database executes a query?",
+        "options": [
+          "SELECT",
+          "ORDER BY",
+          "FROM / JOIN",
+          "LIMIT"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "Logical order: FROM/JOIN → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT.",
+        "concept": "GROUP BY",
+        "difficulty": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001023",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 6,
+        "kind": "mcq",
+        "prompt": "Top 5 customers by number of orders, highest first?",
+        "options": [
+          "ORDER BY customer_id LIMIT 5",
+          "GROUP BY customer_id ORDER BY COUNT(*) DESC LIMIT 5",
+          "GROUP BY COUNT(*) LIMIT 5",
+          "WHERE COUNT(*) TOP 5"
+        ],
+        "correct_index": 1,
+        "answers": null,
+        "explanation": "Group, sort the counts descending, then cap at 5.",
+        "concept": "GROUP BY",
+        "difficulty": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000001024",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 7,
+        "kind": "blank",
+        "prompt": "Remove duplicate cities from the results: SELECT ____ city FROM customers;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "DISTINCT"
+        ],
+        "explanation": "DISTINCT keeps one copy of each value.",
+        "concept": "WHERE",
+        "difficulty": 2
+      }
+    ],
+    "resources": []
+  }
+}
