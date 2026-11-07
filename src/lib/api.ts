@@ -27,7 +27,7 @@ export function friendly(err: unknown, fallback: string): AppError {
   return new AppError(msg || fallback);
 }
 
-async function functionError(error: unknown, fallback: string, fn: string): Promise<AppError> {
+export async function functionError(error: unknown, fallback: string, fn: string): Promise<AppError> {
   if (error instanceof FunctionsHttpError) {
     const res = error.context as Response;
     try {
