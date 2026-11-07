@@ -102,7 +102,6 @@ create policy "write own resource opens" on public.resource_opens
       select 1 from public.questions q
       where q.id = resource_opens.question_id and q.level_id = resource_opens.level_id)));
 
--- ---------------------------------------------------------------- explicit grants
 -- Don't rely on hosted defaults: the app (authenticated role) reads its own rows through RLS,
 -- and may only insert attempts and resource_opens.
 

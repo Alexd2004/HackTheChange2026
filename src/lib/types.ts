@@ -166,6 +166,20 @@ export interface ResourceOpen {
   duration_ms: number | null;
 }
 
+/** complete_level() result after migration 002 (adds XP awarded, profile totals). */
+export interface CompleteLevelResultV2 extends CompleteLevelResult {
+  xp_awarded: number; // 0 when replaying without beating the best score
+  total_xp: number;
+  streak: number;
+}
+
+/** Extra details saved with each answer (Person B, migration 002). */
+export interface AttemptDetails {
+  runId: string;
+  timeMs: number;
+  answer: string;
+}
+
 /** Account state shown in the app (Person B, src/lib/auth.ts). */
 export interface AuthState {
   userId: string | null;
