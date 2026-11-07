@@ -6,9 +6,11 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Switch, Text, TextInput, View } from "react-native";
 import { AppError, importDemoPlan, listPlans, setPendingPlanInput, USE_MOCK } from "@/lib/api";
+import { getProfile } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
 import { colors } from "@/lib/theme";
 import type { Plan } from "@/lib/types";
+import { ProgressHeader } from "@/components/ProgressHeader";
 import { Button, Screen } from "@/components/ui";
 
 type ResumeMode = "pdf" | "text";
@@ -26,12 +28,16 @@ export default function UploadScreen() {
   const [picking, setPicking] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       listPlans().then(setPlans).catch(() => setPlans([]));
+      getProfile().then((p) => setCurrentPlanId(p?.current_plan_id ?? null)).catch(() => {});
     }, []),
   );
+  // "Continue" = the plan the user last opened (profile), else the newest one.
+  const continuePlan = plans.find((p) => p.id === currentPlanId) ?? plans[0];
 
   const resumeReady = mode === "pdf" ? !!pdf : resumeText.trim().length >= 100;
   const postingReady = posting.trim().length >= 80;
@@ -81,7 +87,8 @@ export default function UploadScreen() {
   return (
     <KeyboardAvoidingView className="flex-1 bg-ink" behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Screen>
-        <View className="pt-6 pb-2">
+        <ProgressHeader />
+        <View className="pt-4 pb-2">
           <Text className="text-sm font-bold uppercase tracking-widest text-brand">SkillQuest</Text>
           <Text className="mt-2 text-3xl font-extrabold leading-9 text-fg" accessibilityRole="header">
             Turn a job posting into a game you can win.
@@ -92,17 +99,17 @@ export default function UploadScreen() {
           {USE_MOCK && <Text className="mt-2 text-xs font-semibold text-challenge">Mock mode: using sample data</Text>}
         </View>
 
-        {plans.length > 0 && (
+        {continuePlan && (
           <Pressable
-            onPress={() => router.push({ pathname: "/plan/[id]", params: { id: plans[0].id } })}
+            onPress={() => router.push({ pathname: "/plan/[id]", params: { id: continuePlan.id } })}
             accessibilityRole="button"
-            accessibilityLabel={`Continue your plan for ${plans[0].job_title}, ${plans[0].match_pct}% match`}
+            accessibilityLabel={`Continue your plan for ${continuePlan.job_title}, ${continuePlan.match_pct}% match`}
             className="mt-4 flex-row items-center justify-between rounded-2xl border border-brand/40 bg-panel p-4 active:opacity-80">
             <View className="flex-1 pr-3">
               <Text className="text-xs font-bold uppercase tracking-wider text-muted">Continue</Text>
-              <Text numberOfLines={1} className="mt-1 text-base font-bold text-fg">{plans[0].job_title}</Text>
+              <Text numberOfLines={1} className="mt-1 text-base font-bold text-fg">{continuePlan.job_title}</Text>
             </View>
-            <Text className="text-2xl font-extrabold text-brand">{plans[0].match_pct}%</Text>
+            <Text className="text-2xl font-extrabold text-brand">{continuePlan.match_pct}%</Text>
           </Pressable>
         )}
 

@@ -64,6 +64,9 @@ export default function ResultScreen() {
           <Stat label="Score" value={`${p.score}%`} color={passed ? colors.good : colors.bad} />
           <Stat label="XP earned" value={passed ? `+${p.xp}` : "0"} color={colors.brand} />
         </View>
+        {passed && p.xp === "0" && (
+          <Text className="-mt-3 text-center text-sm text-muted">No new XP on a replay unless you beat your best score.</Text>
+        )}
 
         <View className="gap-3 rounded-2xl border border-line bg-panel p-4">
           <View className="flex-row items-end justify-between">

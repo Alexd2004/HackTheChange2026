@@ -5,7 +5,7 @@ import mockLevels from "../mock/level.json";
 import mockPlan from "../mock/plan.json";
 import { supabase, supabaseConfigured } from "./supabase";
 import type {
-  CompleteLevelResult, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage,
+  AttemptDetails, CompleteLevelResultV2, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage,
 } from "./types";
 
 export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === "1";
@@ -19,7 +19,8 @@ const demoLevels = mockLevels as LevelContent;
 /** An error whose message is safe to show to the user. */
 export class AppError extends Error {}
 
-function friendly(err: unknown, fallback: string): AppError {
+/** Turns any error into one with a message safe to show. Shared with auth.ts / analytics.ts. */
+export function friendly(err: unknown, fallback: string): AppError {
   if (err instanceof AppError) return err;
   const msg = err instanceof Error ? err.message : String(err);
   if (/network|fetch|timed? ?out/i.test(msg)) return new AppError("Can't reach the server. Check your internet and try again.");
@@ -67,6 +68,11 @@ export function ensureSession(): Promise<void> {
   return sessionPromise;
 }
 
+/** Forget the cached session (after sign-out / sign-in) so the next call starts fresh. */
+export function resetSession(): void {
+  sessionPromise = null;
+}
+
 // ------------------------------------------------------------------ pending plan input
 // The upload screen stores the resume here, then the building screen sends it.
 // (A PDF is too big to pass through route params.)
@@ -80,16 +86,28 @@ export const takePendingPlanInput = () => { const i = pendingInput; pendingInput
 const mock = {
   bundle: JSON.parse(JSON.stringify(demoBundle)) as PlanBundle,
   hasPlan: false,
+  streak: 0,
 };
+
+/** Mock-mode numbers for the profile (auth.ts uses these when USE_MOCK is on). */
+export const mockProfileStats = () => ({
+  total_xp: mock.bundle.plan.xp,
+  streak: mock.streak,
+  current_plan_id: mock.hasPlan ? mock.bundle.plan.id : null,
+});
 
 function mockAllLevels(): Level[] {
   return mock.bundle.stages.flatMap((s) => s.levels);
 }
 
-function mockComplete(levelId: string, score: number, xp: number): CompleteLevelResult {
+function mockComplete(levelId: string, score: number, xp: number): CompleteLevelResultV2 {
   const all = mockAllLevels();
   const i = all.findIndex((l) => l.id === levelId);
   const lv = all[i];
+  // Same rule as complete_level v2: full XP on the first completion; a better score later
+  // earns only the improvement (xp x points gained / 100).
+  const prevBest = lv.best_score ?? 0;
+  const award = lv.status !== "completed" ? xp : score > prevBest ? Math.floor((xp * (score - prevBest)) / 100) : 0;
   lv.status = "completed";
   lv.best_score = Math.max(lv.best_score ?? 0, score);
   const next = all[i + 1] ?? null;
@@ -100,8 +118,12 @@ function mockComplete(levelId: string, score: number, xp: number): CompleteLevel
     .filter((s) => !s.is_gap || stages.some((st) => st.skill_id === s.id && st.levels.some((l) => l.type === "boss" && l.status === "completed")))
     .reduce((a, s) => a + s.weight, 0);
   plan.match_pct = Math.round((100 * have) / total);
-  plan.xp += xp;
-  return { match_pct: plan.match_pct, xp: plan.xp, next_level_id: next?.id ?? null };
+  plan.xp += award;
+  mock.streak = Math.max(mock.streak, 1);
+  return {
+    match_pct: plan.match_pct, xp: plan.xp, next_level_id: next?.id ?? null,
+    xp_awarded: award, total_xp: plan.xp, streak: mock.streak,
+  };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -216,17 +238,32 @@ export async function getLevelBundle(levelId: string): Promise<LevelBundle> {
 }
 
 /** Saves one answer. Fire-and-forget: a failed write never blocks the game. */
-export function recordAttempt(questionId: string, correct: boolean): void {
+export function recordAttempt(questionId: string, correct: boolean, details?: AttemptDetails): void {
   if (USE_MOCK) return;
-  supabase.from("attempts").insert({ question_id: questionId, correct }).then(({ error }) => {
-    if (error) console.warn("attempt not saved:", error.message);
+  const basic = { question_id: questionId, correct };
+  const row = details
+    ? {
+        ...basic,
+        run_id: details.runId,
+        time_ms: Math.max(0, Math.min(Math.round(details.timeMs), 3_600_000)),
+        answer: Array.from(details.answer).slice(0, 300).join(""), // by character, never splits an emoji
+      }
+    : basic;
+  supabase.from("attempts").insert(row).then(({ error }) => {
+    if (!error) return;
+    // Migration 002 not applied yet (unknown column): still save the answer the old way.
+    if (details && (error.code === "PGRST204" || /column/i.test(error.message))) {
+      supabase.from("attempts").insert(basic).then(({ error: e2 }) => e2 && console.warn("attempt not saved:", e2.message));
+      return;
+    }
+    console.warn("attempt not saved:", error.message);
   });
 }
 
-export async function completeLevel(levelId: string, score: number, xp: number): Promise<CompleteLevelResult> {
+export async function completeLevel(levelId: string, score: number, xp: number): Promise<CompleteLevelResultV2> {
   if (USE_MOCK) return mockComplete(levelId, score, xp);
   await ensureSession();
   const { data, error } = await supabase.rpc("complete_level", { level_id: levelId, score, xp_earned: xp });
   if (error) throw friendly(error, "Couldn't save your progress.");
-  return data as CompleteLevelResult;
+  return data as CompleteLevelResultV2;
 }
