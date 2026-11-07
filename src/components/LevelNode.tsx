@@ -1,4 +1,4 @@
-// A round level button on the map: lock when locked, star when completed,
+// A round level button on the map: lock icon when locked, star when completed,
 // number / bolt / skull for normal / challenge / boss. The current level gently pulses.
 import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -8,6 +8,7 @@ import Animated, {
 import { useSettings } from "@/lib/settings";
 import { colors, levelColor, levelTypeLabel } from "@/lib/theme";
 import type { Level } from "@/lib/types";
+import { Icon } from "./pixel";
 
 export const NODE_SIZE = 72;
 
@@ -33,7 +34,7 @@ export function LevelNode({
   const accent = levelColor(level.type);
   const size = level.type === "boss" ? NODE_SIZE + 12 : NODE_SIZE;
 
-  const icon = locked ? "🔒" : done ? "★" : level.type === "boss" ? "💀" : level.type === "challenge" ? "⚡" : String(number);
+  const icon = locked ? "lock" : done ? "star" : level.type === "boss" ? "skull" : level.type === "challenge" ? "lightning-bolt" : null;
   const stateText = locked ? "locked" : done ? `completed, best score ${level.best_score ?? 0}%` : "ready to play";
 
   return (
@@ -60,14 +61,11 @@ export function LevelNode({
             },
             pulse,
           ]}>
-          <Text
-            style={{
-              fontSize: locked ? 24 : level.type === "normal" && !done ? 26 : 30,
-              fontWeight: "800",
-              color: done ? colors.ink : locked ? colors.muted : accent,
-            }}>
-            {icon}
-          </Text>
+          {icon ? (
+            <Icon name={icon} size={locked ? 26 : 32} color={done ? colors.ink : locked ? colors.muted : accent} />
+          ) : (
+            <Text style={{ fontSize: 26, fontWeight: "800", color: accent }}>{number}</Text>
+          )}
         </Animated.View>
       </Pressable>
       <Text

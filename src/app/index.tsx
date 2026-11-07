@@ -1,6 +1,7 @@
 // Upload screen: add a resume (PDF or pasted text) + paste a job posting → build the map.
 // Also: continue an existing plan and load the demo plan. Pixel theme shared with the landing.
 import { Landing } from "@/components/Landing";
+import { field, font } from "@/components/pixel";
 import {
   AppError,
   importDemoPlan,
@@ -8,7 +9,7 @@ import {
   setPendingPlanInput,
   USE_MOCK,
 } from "@/lib/api";
-import { pixelColors as c, pixelFont } from "@/lib/theme";
+import { pixelColors as c } from "@/lib/theme";
 import type { Plan } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -25,7 +26,6 @@ import {
   Text,
   TextInput,
   View,
-  type TextStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -38,18 +38,6 @@ interface PickedPdf {
 }
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
-
-const font = (fontSize: number, color: string = c.wood): TextStyle => ({
-  fontFamily: pixelFont,
-  fontSize,
-  lineHeight: fontSize * 1.15,
-  color,
-});
-const field = {
-  backgroundColor: c.cream,
-  borderWidth: 2,
-  borderColor: c.wood,
-} as const;
 
 export default function UploadScreen() {
   const [fontLoaded] = useFonts({ Jersey25_400Regular });

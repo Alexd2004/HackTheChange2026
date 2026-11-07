@@ -1,47 +1,7 @@
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
-import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { PixelBackground } from "@/components/pixel";
 import { pixelColors as c, pixelFont as pixel } from "@/lib/theme";
-
-// Pixel flowers/tufts: [left %, top %, color].
-const dots: [number, number, string][] = [
-  [8, 8, "#F6A6D8"],
-  [86, 14, "#FFFFFF"],
-  [12, 30, c.grassDark],
-  [80, 38, "#F6A6D8"],
-  [6, 56, "#FFFFFF"],
-  [88, 62, c.grassDark],
-  [14, 80, "#F6A6D8"],
-  [78, 88, "#FFFFFF"],
-];
-
-/** grass background with pixel flowers, shared by the landing and loading screens. */
-export function PixelBackground({ children }: { children: ReactNode }) {
-  return (
-    <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: c.grass }}
-      edges={["top", "bottom"]}
-    >
-      <View
-        className="absolute inset-0"
-        pointerEvents="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        {dots.map(([l, t, color], i) => (
-          <View
-            key={`d${i}`}
-            className="absolute h-3 w-3"
-            style={{ left: `${l}%`, top: `${t}%`, backgroundColor: color }}
-          />
-        ))}
-      </View>
-      {children}
-    </SafeAreaView>
-  );
-}
 
 export function Landing({ onContinue }: { onContinue: () => void }) {
   const [loaded] = useFonts({ Jersey25_400Regular });

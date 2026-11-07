@@ -9,6 +9,7 @@ import { colors } from "@/lib/theme";
 import type { LevelType } from "@/lib/types";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Button, Screen } from "@/components/ui";
+import { Icon } from "@/components/pixel";
 
 type Params = {
   id: string; planId: string; type: LevelType; score: string; correct: string; total: string;
@@ -46,13 +47,13 @@ export default function ResultScreen() {
   const bossWin = p.type === "boss" && passed;
 
   const title = bossWin ? "Boss defeated!" : passed ? "Level complete!" : p.bossLost === "1" ? "The boss won this round" : "Almost there";
-  const emoji = bossWin ? "🏆" : passed ? "⭐" : "💪";
+  const icon = bossWin ? "trophy" : passed ? "star" : "arm-flex";
 
   return (
     <Screen>
       <View className="flex-1 justify-center gap-6 py-10">
         <View className="items-center gap-2" accessible accessibilityRole="header" accessibilityLabel={`${title}. Score ${p.score} percent, ${p.correct} of ${p.total} correct.`}>
-          <Text className="text-6xl">{emoji}</Text>
+          <Icon name={icon} size={72} color={passed ? colors.challenge : colors.brand} />
           <Text className="text-center text-3xl font-extrabold text-fg">{title}</Text>
           <Text className="text-center text-base text-muted">
             {p.correct} of {p.total} correct · {p.score}%
@@ -72,13 +73,21 @@ export default function ResultScreen() {
           <View className="flex-row items-end justify-between">
             <Text className="text-base font-semibold text-muted">Job match</Text>
             <View className="flex-row items-end gap-2">
-              {gained > 0 && <Text className="pb-1 text-sm font-bold text-good">▲ {gained}%</Text>}
+              {gained > 0 && (
+                <View className="flex-row items-center pb-1">
+                  <Icon name="arrow-up-bold" size={16} color={colors.good} />
+                  <Text className="text-sm font-bold text-good">{gained}%</Text>
+                </View>
+              )}
               <Text className="text-4xl font-extrabold text-brand" accessibilityLabel={`Job match ${after} percent`}>{shown}%</Text>
             </View>
           </View>
           <ProgressBar pct={shown} label={`Job match ${after} percent`} height={12} />
           {bossWin ? (
-            <Text className="text-sm leading-5 text-good">✓ This skill now counts toward your match.</Text>
+            <View className="flex-row items-center gap-1">
+              <Icon name="check-bold" size={16} color={colors.good} />
+              <Text className="flex-1 text-sm leading-5 text-good">This skill now counts toward your match.</Text>
+            </View>
           ) : passed ? (
             <Text className="text-sm leading-5 text-muted">Beat this stage’s boss to raise your match.</Text>
           ) : (
