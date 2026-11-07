@@ -24,7 +24,7 @@ The first run downloads dependencies, so it is slower.
 |---|---|
 | `shuffle_test.ts` | The correct answer lands in A/B/C/D about 25% each; the answer text follows its index; "All of the above" style options stay in place |
 | `stage_skills_test.ts` | Which skills become stages: biggest gaps first, never more than 3, review stages when there are no gaps |
-| `resources_test.ts` | The AI link picker: picks are taken by number, invented or repeated numbers are ignored, max 3, falls back to the top results if the AI fails, no resources when the search is empty |
+| `resources_test.ts` | The AI link picker: picks are taken by number, invented or repeated numbers are ignored, max 3, falls back to the top results if the AI fails, searches again with a simpler query when there are fewer than 3 results, no resources when the search is empty |
 | `gemini_test.ts` | `callGemini` with faked Google replies: normal call, 503 retry, bad JSON retry, 429, wrong key, wrong model name |
 
 ## Live tests (`deno task live`)
@@ -38,7 +38,7 @@ A test is skipped if its key is missing.
 | `fit_live_test.ts` | Sample resumes vs sample postings: PostgreSQL counts as SQL, a career changer has gaps, "Power BI or Tableau" is one skill, a strong resume has almost no gaps |
 | `map_live_test.ts` | The map has 3 stages of 7 levels, and the boss questions cover the earlier levels |
 | `shuffle_live_test.ts` | Shuffled multiple-choice questions still pass the verification call |
-| `resources_live_test.ts` | A real search then the real AI picker returns 1 to 3 different links, all from the search results |
+| `resources_live_test.ts` | A real search then the real AI picker returns 1 to 3 different links, all from the search results; a nonsense level doesn't crash or invent links |
 | `question_quality_live_test.ts` | Level 6 of 6 is harder than level 1 of 6, questions stay short, and the numbers are printed next to the mock level file |
 
 The samples in `samples/` are made-up people and postings, not real data.

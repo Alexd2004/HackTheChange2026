@@ -18,7 +18,7 @@ const geminiPicks = (picks: { i: number; why: string }[]) =>
 
 /** Fake Keenable and Google. Returns what was called. */
 async function withFakeWeb(
-  replies: { keenable: () => Response; gemini: () => Response },
+  replies: { keenable: (callNumber: number) => Response; gemini: () => Response },
   fn: () => Promise<void>,
 ): Promise<{ keenableUrls: string[]; geminiCalls: number }> {
   const real = globalThis.fetch;
@@ -27,7 +27,7 @@ async function withFakeWeb(
     const url = input instanceof Request ? input.url : String(input);
     if (url.includes("keenable")) {
       seen.keenableUrls.push(url);
-      return Promise.resolve(replies.keenable());
+      return Promise.resolve(replies.keenable(seen.keenableUrls.length - 1));
     }
     seen.geminiCalls++;
     return Promise.resolve(replies.gemini());
@@ -89,4 +89,47 @@ Deno.test({ name: "resources: a Keenable error means no resources, not a crash",
     assertEquals(await findResources(level), []);
   });
   assertEquals(seen.geminiCalls, 0);
+}});
+
+const queryOf = (url: string) => decodeURIComponent(new URL(url).searchParams.get("query")!);
+const result = (k: number) => ({ title: `Result ${k}`, url: `https://site${k}.example/tutorial`, description: "", snippet: `raw ${k}` });
+
+Deno.test({ name: "resources: fewer than 3 results triggers a second search with a simpler query, merged without repeats", ...opts, fn: async () => {
+  const seen = await withFakeWeb(
+    {
+      // first search finds 2, the simpler one finds 5 (one of which is a repeat of the first search)
+      keenable: (n) => json({ results: n === 0 ? [result(1), result(2)] : [result(2), result(3), result(4), result(5), result(6)] }),
+      gemini: () => geminiPicks([{ i: 1, why: "a" }, { i: 3, why: "b" }, { i: 6, why: "c" }]),
+    },
+    async () => {
+      const r = await findResources(level);
+      assertEquals(r.map((x) => x.title), ["Result 1", "Result 3", "Result 6"]);
+    },
+  );
+  assertEquals(seen.keenableUrls.length, 2);
+  assertEquals(queryOf(seen.keenableUrls[0]), "SQL INNER JOIN LEFT JOIN ON clause tutorial");
+  assertEquals(queryOf(seen.keenableUrls[1]), "SQL INNER JOIN tutorial");
+}});
+
+Deno.test({ name: "resources: 3 or more results means no second search", ...opts, fn: async () => {
+  const seen = await withFakeWeb({ keenable: () => json({ results: [result(1), result(2), result(3)] }), gemini: () => geminiPicks([{ i: 1, why: "a" }]) }, async () => {
+    assertEquals((await findResources(level)).length, 1);
+  });
+  assertEquals(seen.keenableUrls.length, 1);
+}});
+
+Deno.test({ name: "resources: both searches empty means no AI call and no resources", ...opts, fn: async () => {
+  const seen = await withFakeWeb({ keenable: () => json({ results: [] }), gemini: () => geminiPicks([]) }, async () => {
+    assertEquals(await findResources(level), []);
+  });
+  assertEquals(seen.keenableUrls.length, 2);
+  assertEquals(seen.geminiCalls, 0);
+}});
+
+Deno.test({ name: "resources: a level with one concept doesn't repeat the identical search", ...opts, fn: async () => {
+  const oneConcept = { ...level, concepts: ["INNER JOIN"] };
+  const seen = await withFakeWeb({ keenable: () => json({ results: [result(1)] }), gemini: () => geminiPicks([{ i: 1, why: "a" }]) }, async () => {
+    assertEquals((await findResources(oneConcept)).length, 1);
+  });
+  assertEquals(seen.keenableUrls.length, 1);
 }});

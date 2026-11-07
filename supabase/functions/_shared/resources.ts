@@ -6,6 +6,7 @@ import { type PickedResources, pickSchema } from "./schemas.ts";
 import { pickResourcesPrompt } from "./prompts.ts";
 
 const CANDIDATES = 8; // search results to choose from
+const MIN_CANDIDATES = 3; // fewer than this and we search again with a simpler query
 const MAX_PICKS = 3;
 
 export async function findResources(level: {
@@ -15,7 +16,17 @@ export async function findResources(level: {
   concepts: string[];
 }): Promise<FoundResource[]> {
   const query = `${level.skill} ${level.concepts.slice(0, 3).join(" ")} tutorial`;
-  const candidates = await searchResources(query, CANDIDATES);
+  let candidates = await searchResources(query, CANDIDATES);
+
+  // A long, specific query can find very little. Try again with just the skill and the first concept.
+  if (candidates.length < MIN_CANDIDATES) {
+    const simpler = `${level.skill} ${level.concepts[0] ?? ""} tutorial`.replace(/\s+/g, " ");
+    if (simpler !== query) {
+      const more = await searchResources(simpler, CANDIDATES);
+      const seenUrls = new Set(candidates.map((c) => c.url));
+      candidates = [...candidates, ...more.filter((m) => !seenUrls.has(m.url))].slice(0, CANDIDATES);
+    }
+  }
   if (candidates.length === 0) return [];
 
   try {

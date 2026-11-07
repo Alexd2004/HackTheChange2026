@@ -36,3 +36,19 @@ for (const level of levels) {
     },
   });
 }
+
+Deno.test({
+  name: "resources: a nonsense level doesn't crash and doesn't invent links",
+  ignore: !live,
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const level = { skill: "Xyzzy", title: "Frobnication", objective: "Frobnicate the gizmo.", concepts: ["plugh", "frobnicate", "gizmo"] };
+    const raw = await searchResources("Xyzzy plugh frobnicate gizmo tutorial", 8);
+    const picked = await findResources(level);
+    console.log(`\nSearch gave ${raw.length} results; the AI kept ${picked.length}:`);
+    picked.forEach((r) => console.log(`  - ${r.title} (${new URL(r.url).hostname}) why: ${r.snippet}`));
+    assert(picked.length <= 3);
+    for (const r of picked) assert(raw.some((c) => c.url === r.url), "every pick must come from the search results");
+  },
+});
