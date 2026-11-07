@@ -1,20 +1,7 @@
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const pixel = "Jersey25_400Regular";
-const c = {
-  grass: "#5DA03A",
-  grassDark: "#3F7A27",
-  dirt: "#D9965B",
-  dirtEdge: "#A8673A",
-  gold: "#FFD34D",
-  outline: "#2B1A0E",
-  parchment: "#F4E4BC",
-  wood: "#4A2E1A",
-  stone: "#C9CDD3",
-  stoneDark: "#6B717A",
-};
+import { pixelColors as c, pixelFont as pixel } from "@/lib/theme";
 
 // Pixel flowers/tufts: [left %, top %, color].
 const dots: [number, number, string][] = [
