@@ -109,6 +109,25 @@ Mix about 60% "mcq" and 40% "blank".
 - difficulty: 1-3.
 Questions must be factually correct and answerable without seeing anything else.`;
 
+export const pickResourcesPrompt = (
+  p: { skill: string; title: string; objective: string; concepts: string[] },
+  results: { title: string; host: string; snippet: string }[],
+) => `
+You pick the best learning links for one level of a learning game.
+Skill: ${p.skill}
+Level: "${p.title}". Objective: ${p.objective}
+Concepts: ${p.concepts.join(", ")}
+
+Search results:
+${results.map((r, i) => `${i + 1}. ${r.title} (${r.host}) ${r.snippet}`).join("\n")}
+
+Pick up to 3 results that best teach these concepts to a beginner. Prefer free, readable tutorials or official docs
+that explain the concepts directly, and prefer different sites over two links from the same site.
+Skip results about other topics, sign-up or paywalled pages, ads, and lists of links.
+Best first. For each pick give i = the result's number and why = one short sentence for the learner
+(under 100 characters) saying what they will get from it.
+If fewer than 3 are good, return fewer. If none are good, return an empty list.`;
+
 export const verifyQuestionsPrompt = (
   questions: { idx: number; kind: string; prompt: string; options: string[] | null }[],
 ) => `

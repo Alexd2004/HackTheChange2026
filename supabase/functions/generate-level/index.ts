@@ -4,7 +4,7 @@
 import { handle, json, UserError } from "../_shared/cors.ts";
 import { admin, must, ok, requireUserId } from "../_shared/supabase.ts";
 import { callGemini } from "../_shared/gemini.ts";
-import { searchResources } from "../_shared/keenable.ts";
+import { findResources } from "../_shared/resources.ts";
 import { questionsSchema, verifySchema, type DraftQuestion, type DraftQuestions, type Verification } from "../_shared/schemas.ts";
 import { verifyQuestionsPrompt, writeQuestionsPrompt } from "../_shared/prompts.ts";
 import { blankMatches } from "../_shared/grading.ts";
@@ -45,10 +45,12 @@ Deno.serve(handle(async (req) => {
   // A fundamentals level knows its place in the stage, so early levels are easier than later ones.
   const position = level.type === "boss" ? undefined : { n: level.idx + 1, of: fundamentals.length };
 
-  // Questions (write + verify) and resources run in parallel.
+  // Questions (write + verify) and resources run in parallel. Only normal levels show resources in the app.
   const [questions, resources] = await Promise.all([
     makeQuestions(level, skill, weakConcepts, earlierLevels, position),
-    searchResources(`${skill} ${level.objective} tutorial`),
+    level.type === "normal"
+      ? findResources({ skill, title: level.title, objective: level.objective, concepts: level.concepts })
+      : Promise.resolve([]),
   ]);
 
   // Another request may have finished first (prefetch + open at the same time).
