@@ -5,7 +5,11 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { getAuthState, getProfile, onAuthChange } from "@/lib/auth";
+import { pixelColors as c } from "@/lib/theme";
 import type { AuthState, Profile } from "@/lib/types";
+import { Icon, font } from "./pixel";
+
+const chip = { backgroundColor: c.cream, borderWidth: 3, borderColor: c.wood } as const;
 
 export function ProgressHeader() {
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -22,27 +26,33 @@ export function ProgressHeader() {
   const label = !auth ? "Account" : auth.isGuest ? "Guest · Save progress" : auth.email ?? "Account";
 
   return (
-    <View className="flex-row items-center justify-between gap-3 pt-4">
+    <View className="flex-row items-center justify-between gap-3">
       <Pressable
         onPress={() => router.push("/account")}
         accessibilityRole="button"
         accessibilityLabel={auth?.isGuest ? "Playing as guest. Save your progress" : `Signed in as ${auth?.email ?? ""}. Account`}
-        className={`min-h-[44px] flex-shrink flex-row items-center gap-2 rounded-full border px-4 active:opacity-80 ${
-          auth?.isGuest ? "border-brand/50 bg-brand/10" : "border-line bg-panel"
-        }`}>
-        <Text className="text-base">{auth?.isGuest ? "👤" : "✅"}</Text>
-        <Text numberOfLines={1} className={`flex-shrink text-sm font-semibold ${auth?.isGuest ? "text-brand" : "text-fg"}`}>
+        className="min-h-[44px] flex-shrink flex-row items-center gap-2 px-3 active:opacity-80"
+        style={chip}>
+        <Icon name={auth && !auth.isGuest ? "account-check" : "account-outline"} size={22} />
+        <Text numberOfLines={1} className="flex-shrink" style={font(20)}>
           {label}
         </Text>
       </Pressable>
 
       {profile && (
         <View
-          className="flex-row items-center gap-3"
+          className="min-h-[44px] flex-row items-center gap-3 px-3"
+          style={chip}
           accessible
           accessibilityLabel={`${profile.total_xp} experience points, ${profile.streak} day streak`}>
-          <Text className="text-sm font-extrabold text-brand">✨ {profile.total_xp} XP</Text>
-          <Text className="text-sm font-extrabold text-challenge">🔥 {profile.streak}</Text>
+          <View className="flex-row items-center gap-1">
+            <Icon name="star-four-points" size={18} color={c.dirtEdge} />
+            <Text style={font(20)}>{profile.total_xp} XP</Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <Icon name="fire" size={18} color={c.red} />
+            <Text style={font(20)}>{profile.streak}</Text>
+          </View>
         </View>
       )}
     </View>

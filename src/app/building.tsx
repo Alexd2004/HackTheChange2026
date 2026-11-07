@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { createPlan, takePendingPlanInput } from "@/lib/api";
 import type { CreatePlanInput } from "@/lib/types";
-import { ErrorState, LoadingState, Screen } from "@/components/ui";
+import { ErrorState, Screen } from "@/components/ui";
+import { PixelBackground, TileBar, outlined } from "@/components/pixel";
+import { pixelColors as c } from "@/lib/theme";
+import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
+
+const TILES = 10;
 
 const STEPS = [
   "Reading your resume…",
@@ -48,16 +53,33 @@ export default function BuildingScreen() {
     return () => clearInterval(t);
   }, [error]);
 
-  return (
-    <Screen scroll={false}>
-      {error ? (
+  const [fontLoaded] = useFonts({ Jersey25_400Regular });
+
+  if (error) {
+    return (
+      <Screen scroll={false}>
         <ErrorState message={error} onRetry={run} onBack={() => router.replace("/")} />
-      ) : (
-        <View className="flex-1 justify-center">
-          <LoadingState message={STEPS[step]} />
-          <Text className="text-center text-sm text-muted">This takes about 15 seconds.</Text>
+      </Screen>
+    );
+  }
+
+  const filled = Math.round(((step + 1) / STEPS.length) * TILES);
+
+  return (
+    <PixelBackground>
+      {fontLoaded && (
+        <View className="w-full max-w-[480px] flex-1 items-center justify-center self-center px-6">
+          <Text accessibilityLiveRegion="polite" style={{ ...outlined(32, "#FFFFFF"), textAlign: "center" }}>
+            {STEPS[step]}
+          </Text>
+
+          <View className="mt-8 w-full" style={{ boxShadow: `6px 6px 0 ${c.outline}` }}>
+            <TileBar filled={filled} total={TILES} label="Building your map" />
+          </View>
+
+          <Text style={{ ...outlined(24), marginTop: 24 }}>This takes about 15 seconds.</Text>
         </View>
       )}
-    </Screen>
+    </PixelBackground>
   );
 }

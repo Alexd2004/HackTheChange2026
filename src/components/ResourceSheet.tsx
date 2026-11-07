@@ -12,6 +12,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors } from "@/lib/theme";
+import { Icon } from "./pixel";
 import { Button } from "./ui";
 
 export function ResourceSheet({
@@ -71,22 +73,13 @@ export function ResourceSheet({
                   }
                   accessibilityRole="link"
                   accessibilityLabel={`${r.title}. Opens in browser.`}
-                  className="min-h-[56px] rounded-2xl border border-line bg-raised p-4 active:opacity-80"
-                >
-                  <Text className="text-base font-semibold text-fg">
-                    {r.title} ↗
-                  </Text>
-                  {r.snippet ? (
-                    <Text
-                      numberOfLines={2}
-                      className="mt-1 text-sm leading-5 text-muted"
-                    >
-                      {r.snippet}
-                    </Text>
-                  ) : null}
-                  <Text numberOfLines={1} className="mt-1 text-xs text-normal">
-                    {hostOf(r.url)}
-                  </Text>
+                  className="min-h-[56px] rounded-2xl border border-line bg-raised p-4 active:opacity-80">
+                  <View className="flex-row items-start gap-2">
+                    <Text className="flex-1 text-base font-semibold text-fg">{r.title}</Text>
+                    <Icon name="open-in-new" size={18} color={colors.muted} />
+                  </View>
+                  {r.snippet ? <Text numberOfLines={2} className="mt-1 text-sm leading-5 text-muted">{r.snippet}</Text> : null}
+                  <Text numberOfLines={1} className="mt-1 text-xs text-normal">{hostOf(r.url)}</Text>
                 </Pressable>
               ))
             )}

@@ -10,6 +10,7 @@ import { LevelNode, NODE_SIZE } from "@/components/LevelNode";
 import { MapPath, type Point } from "@/components/MapPath";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ErrorState, LoadingState, Screen } from "@/components/ui";
+import { Icon } from "@/components/pixel";
 
 const ROW_HEIGHT = 150; // vertical space per level node (node + label)
 const ZIGZAG = [0.5, 0.75, 0.5, 0.25]; // x position of each node as a fraction of width
@@ -54,13 +55,13 @@ export default function MapScreen() {
           accessibilityLabel="Back to start"
           hitSlop={8}
           className="min-h-[44px] min-w-[44px] justify-center">
-          <Text className="text-2xl text-fg">←</Text>
+          <Icon name="arrow-left" size={28} color={colors.fg} />
         </Pressable>
         <View
           className="flex-row items-center gap-1 rounded-full bg-panel px-4 py-2"
           accessible
           accessibilityLabel={`${plan.xp} experience points`}>
-          <Text className="text-base">✨</Text>
+          <Icon name="star-four-points" size={18} color={colors.brand} />
           <Text className="text-base font-extrabold text-brand">{plan.xp} XP</Text>
         </View>
       </View>
@@ -75,20 +76,25 @@ export default function MapScreen() {
         <View className="flex-row items-end justify-between">
           <Text className="text-base font-semibold text-muted">Job match</Text>
           <View className="flex-row items-end gap-2">
-            {gained > 0 && <Text className="pb-1 text-sm font-bold text-good">▲ {gained}%</Text>}
+            {gained > 0 && (
+              <View className="flex-row items-center pb-1">
+                <Icon name="arrow-up-bold" size={16} color={colors.good} />
+                <Text className="text-sm font-bold text-good">{gained}%</Text>
+              </View>
+            )}
             <Text className="text-4xl font-extrabold text-brand">{plan.match_pct}%</Text>
           </View>
         </View>
         <ProgressBar pct={plan.match_pct} label={`Job match ${plan.match_pct} percent`} height={12} />
         {strengths.length > 0 && (
           <Text className="text-sm leading-5 text-muted">
-            <Text className="font-semibold text-good">✓ You have: </Text>
+            <Text className="font-semibold text-good">You have: </Text>
             {strengths.map((s) => s.name).join(", ")}
           </Text>
         )}
         {gaps.length > 0 && (
           <Text className="text-sm leading-5 text-muted">
-            <Text className="font-semibold text-challenge">△ To learn: </Text>
+            <Text className="font-semibold text-challenge">To learn: </Text>
             {gaps.map((s) => s.name).join(", ")}
           </Text>
         )}
@@ -96,7 +102,7 @@ export default function MapScreen() {
 
       {stages.length === 0 ? (
         <View className="mt-8 items-center gap-2 rounded-2xl bg-panel p-6">
-          <Text className="text-4xl">🎉</Text>
+          <Icon name="party-popper" size={44} color={colors.brand} />
           <Text className="text-center text-lg font-bold text-fg">No skill gaps found</Text>
           <Text className="text-center text-base text-muted">Your resume already covers what this posting asks for.</Text>
         </View>
@@ -143,9 +149,12 @@ function StageSection({
           <Text className="text-xs font-bold uppercase tracking-widest text-muted">
             Stage {stageNumber} · {skillName}
           </Text>
-          <Text className={`text-xs font-bold ${beaten ? "text-good" : "text-muted"}`}>
-            {beaten ? "✓ Beaten" : `${done}/${stage.levels.length}`}
-          </Text>
+          <View className="flex-row items-center gap-1">
+            {beaten && <Icon name="check-bold" size={14} color={colors.good} />}
+            <Text className={`text-xs font-bold ${beaten ? "text-good" : "text-muted"}`}>
+              {beaten ? "Beaten" : `${done}/${stage.levels.length}`}
+            </Text>
+          </View>
         </View>
         <Text className="mt-1 text-xl font-extrabold text-fg">{stage.title}</Text>
         {stage.summary ? <Text className="mt-1 text-sm leading-5 text-muted">{stage.summary}</Text> : null}
