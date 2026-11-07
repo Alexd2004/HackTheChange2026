@@ -26,6 +26,7 @@ The first run downloads dependencies, so it is slower.
 | `stage_skills_test.ts` | Which skills become stages: biggest gaps first, never more than 3, review stages when there are no gaps |
 | `resources_test.ts` | The AI link picker: picks are taken by number, invented or repeated numbers are ignored, max 3, falls back to the top results if the AI fails, searches again with a simpler query when there are fewer than 3 results, no resources when the search is empty |
 | `revamp_test.ts` | Resume revamp rules: which skills may be added, blocked skills removed from skills, summary, bullets and headline, earned skills always added, the AI's reply never written to logs |
+| `resume_store_test.ts` | The on-phone resume store (`src/lib/resumeStore.ts`) with the phone's files faked: text and PDF round trip, only a tiny pointer in AsyncStorage, null when the file is gone, one resume per plan, ids can't escape the folder |
 | `gemini_test.ts` | `callGemini` with faked Google replies: normal call, 503 retry, bad JSON retry, 429, wrong key, wrong model name |
 
 ## Live tests (`deno task live`)
