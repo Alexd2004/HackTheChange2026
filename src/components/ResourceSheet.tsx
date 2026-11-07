@@ -12,7 +12,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { Resource } from "@/lib/types";
 import { colors } from "@/lib/theme";
 import { Icon } from "./pixel";
 import { Button } from "./ui";

@@ -40,7 +40,7 @@ import {
 } from "@/lib/grading";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
-import type { LevelBundle } from "@/lib/types";
+import type { CompleteLevelResultV2, LevelBundle } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -246,10 +246,7 @@ export default function LevelScreen() {
     const score = scorePct(correctCount, total);
     const passed = isBoss ? hp === 0 : score >= PASS_PCT;
     const xp = xpFor(correctCount, type);
-    let after = null as null | {
-      match_pct: number;
-      next_level_id: string | null;
-    };
+    let after: CompleteLevelResultV2 | null = null;
     const before = await getPlanBundle(bundle.plan_id)
       .then((p) => p.plan.match_pct)
       .catch(() => null);

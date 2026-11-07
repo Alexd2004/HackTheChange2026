@@ -2,6 +2,8 @@
 // Also: continue an existing plan and load the demo plan. Pixel theme shared with the landing.
 import { Landing } from "@/components/Landing";
 import { field, font } from "@/components/pixel";
+import { ProgressHeader } from "@/components/ProgressHeader";
+import { getProfile } from "@/lib/auth";
 import {
   AppError,
   importDemoPlan,
@@ -50,6 +52,7 @@ export default function UploadScreen() {
   const [picking, setPicking] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   // While a text field is focused the keyboard eats the screen: show only that field, hide the footer, offer a Done button.
   const [focused, setFocused] = useState<"resume" | "posting" | null>(null);
   const typing = focused !== null;
@@ -68,6 +71,9 @@ export default function UploadScreen() {
       listPlans()
         .then(setPlans)
         .catch(() => setPlans([]));
+      getProfile()
+        .then((p) => setCurrentPlanId(p?.current_plan_id ?? null))
+        .catch(() => {});
     }, []),
   );
   // "Continue" = the plan the user last opened (profile), else the newest one.
@@ -170,7 +176,8 @@ export default function UploadScreen() {
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         {fontLoaded && (
           <View className="w-full max-w-[480px] flex-1 self-center px-4 pb-3 pt-3">
-            <View className="flex-row items-end justify-between">
+            {!typing && <ProgressHeader />}
+            <View className="mt-3 flex-row items-end justify-between">
               <Text
                 accessibilityRole="header"
                 style={{
@@ -206,16 +213,16 @@ export default function UploadScreen() {
               )}
             </View>
 
-            {plans.length > 0 && (
+            {continuePlan && (
               <Pressable
                 onPress={() =>
                   router.push({
                     pathname: "/plan/[id]",
-                    params: { id: plans[0].id },
+                    params: { id: continuePlan.id },
                   })
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`Continue your plan for ${plans[0].job_title}, ${plans[0].match_pct}% match`}
+                accessibilityLabel={`Continue your plan for ${continuePlan.job_title}, ${continuePlan.match_pct}% match`}
                 className="mt-4 flex-row items-center justify-between px-3 py-2 active:opacity-80"
                 style={{
                   backgroundColor: c.parchment,
@@ -229,9 +236,9 @@ export default function UploadScreen() {
                   className="flex-1 pr-3"
                   style={font(20)}
                 >
-                  Continue: {plans[0].job_title}
+                  Continue: {continuePlan.job_title}
                 </Text>
-                <Text style={font(24, c.grassDark)}>{plans[0].match_pct}%</Text>
+                <Text style={font(24, c.grassDark)}>{continuePlan.match_pct}%</Text>
               </Pressable>
             )}
 
