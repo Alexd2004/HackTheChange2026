@@ -76,6 +76,28 @@ export async function compareResumeToPosting(
   };
 }
 
+export type StageMode = "gap" | "polish";
+
+/**
+ * Which skills become stages. Normally the biggest gaps: required first, then weight, then the
+ * biggest level difference. If the resume already meets every skill, the map would be empty,
+ * so polish the skills that matter most and sit closest to the bar (smallest margin) instead.
+ */
+export function pickStageSkills(skills: FitSkill[], max: number): { mode: StageMode; skills: FitSkill[] } {
+  const important = (a: FitSkill, b: FitSkill) => Number(b.required) - Number(a.required) || b.weight - a.weight;
+
+  const gaps = skills
+    .filter((s) => s.is_gap)
+    .sort((a, b) => important(a, b) || (b.need_level - b.have_level) - (a.need_level - a.have_level))
+    .slice(0, max);
+  if (gaps.length > 0) return { mode: "gap", skills: gaps };
+
+  const polish = [...skills]
+    .sort((a, b) => important(a, b) || (a.have_level - a.need_level) - (b.have_level - b.need_level))
+    .slice(0, max);
+  return { mode: "polish", skills: polish };
+}
+
 function dedupe<T>(items: T[], key: (t: T) => string): T[] {
   const seen = new Set<string>();
   return items.filter((t) => {

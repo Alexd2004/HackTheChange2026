@@ -6,7 +6,7 @@ import { admin, must, ok, requireUserId } from "../_shared/supabase.ts";
 import { callGemini } from "../_shared/gemini.ts";
 import { mapSchema, type MapPlan } from "../_shared/schemas.ts";
 import { buildMapPrompt } from "../_shared/prompts.ts";
-import { compareResumeToPosting, norm } from "./fit.ts";
+import { compareResumeToPosting, norm, pickStageSkills } from "./fit.ts";
 
 const MAX_PDF_BASE64 = 7_000_000; // ~5 MB file
 const MAX_GAP_STAGES = 3; // one stage per missing skill, never more than this
@@ -31,17 +31,12 @@ Deno.serve(handle(async (req) => {
   const fit = await compareResumeToPosting({ posting, pdfBase64: pdf, resumeText });
   const { skills, match_pct: matchPct } = fit;
 
-  // 4. Top gaps: required first, then weight, then biggest level difference.
-  const gaps = skills
-    .filter((s) => s.is_gap)
-    .sort((a, b) =>
-      Number(b.required) - Number(a.required) || b.weight - a.weight ||
-      (b.need_level - b.have_level) - (a.need_level - a.have_level))
-    .slice(0, MAX_GAP_STAGES);
+  // 4. Which skills become stages: the top gaps, or (if there are none) the skills to polish. See fit.ts.
+  const { mode, skills: stageSkills } = pickStageSkills(skills, MAX_GAP_STAGES);
 
-  const map = gaps.length
+  const map = stageSkills.length
     ? await callGemini<MapPlan>(
-        buildMapPrompt(fit.job_title, gaps.map((g) => ({ name: g.name, have: g.have_level, need: g.need_level }))),
+        buildMapPrompt(fit.job_title, stageSkills.map((g) => ({ name: g.name, have: g.have_level, need: g.need_level })), mode),
         mapSchema, [], 0.7,
       )
     : { stages: [] };
@@ -65,9 +60,9 @@ Deno.serve(handle(async (req) => {
     );
     const skillIdByName = new Map(insertedSkills.map((s) => [norm(s.name), s.id]));
 
-    for (let i = 0; i < gaps.length; i++) {
-      const gap = gaps[i];
-      // Match the AI's stage to the gap by name, falling back to position.
+    for (let i = 0; i < stageSkills.length; i++) {
+      const gap = stageSkills[i];
+      // Match the AI's stage to its skill by name, falling back to position.
       const st = map.stages.find((s) => norm(s.skill) === norm(gap.name)) ?? map.stages[i];
       const stage = must(
         await admin.from("stages").insert({
@@ -75,7 +70,7 @@ Deno.serve(handle(async (req) => {
           skill_id: skillIdByName.get(norm(gap.name)),
           idx: i,
           title: st?.title?.slice(0, 60) || gap.name,
-          summary: st?.summary?.slice(0, 240) || `Level up your ${gap.name}.`,
+          summary: st?.summary?.slice(0, 240) || (mode === "polish" ? `Review your ${gap.name}.` : `Level up your ${gap.name}.`),
         }).select("id").single(),
         "insert stage",
       );
