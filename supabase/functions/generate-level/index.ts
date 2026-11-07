@@ -35,10 +35,12 @@ Deno.serve(handle(async (req) => {
 
   const weakConcepts = await findWeakConcepts(userId, level.stage.plan_id);
   const skill = level.stage.skill.name;
+  // The boss is the unit test for its stage, so it needs to know what the earlier levels taught.
+  const earlierLevels = level.type === "boss" ? await loadEarlierLevels(level.stage.id) : [];
 
   // Questions (write + verify) and resources run in parallel.
   const [questions, resources] = await Promise.all([
-    makeQuestions(level, skill, weakConcepts),
+    makeQuestions(level, skill, weakConcepts, earlierLevels),
     searchResources(`${skill} ${level.objective} tutorial`),
   ]);
 
@@ -53,6 +55,16 @@ Deno.serve(handle(async (req) => {
   ok(await admin.from("levels").update({ generated: true }).eq("id", levelId), "mark generated");
   return json({ ok: true });
 }));
+
+/** Title and concepts of the non-boss levels in a stage, in play order. */
+async function loadEarlierLevels(stageId: string): Promise<{ title: string; concepts: string[] }[]> {
+  const res = await admin.from("levels").select("title, concepts").eq("stage_id", stageId).neq("type", "boss").order("idx");
+  if (res.error) {
+    console.warn("earlier levels query failed:", res.error.message);
+    return [];
+  }
+  return (res.data ?? []).map((l) => ({ title: l.title, concepts: l.concepts ?? [] }));
+}
 
 /** Concepts the user answered wrong anywhere in this plan (most frequent first, max 4). */
 async function findWeakConcepts(userId: string, planId: string): Promise<string[]> {
@@ -80,6 +92,7 @@ async function makeQuestions(
   level: { type: LevelType; title: string; objective: string; concepts: string[] },
   skill: string,
   weakConcepts: string[],
+  earlierLevels: { title: string; concepts: string[] }[],
 ): Promise<DraftQuestion[]> {
   const target = COUNT[level.type];
   let kept: DraftQuestion[] = [];
@@ -87,7 +100,7 @@ async function makeQuestions(
   for (let round = 1; round <= 2 && kept.length < MIN[level.type]; round++) {
     const draft = await callGemini<DraftQuestions>(
       writeQuestionsPrompt({ skill, type: level.type, title: level.title, objective: level.objective,
-        concepts: level.concepts, weakConcepts, count: target }),
+        concepts: level.concepts, weakConcepts, earlierLevels, count: target }),
       questionsSchema, [], 0.8,
     );
     const valid = (draft.questions ?? []).map(cleanQuestion).filter((q): q is DraftQuestion => q !== null);

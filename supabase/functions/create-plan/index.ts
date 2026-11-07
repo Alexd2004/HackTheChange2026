@@ -9,8 +9,9 @@ import { buildMapPrompt } from "../_shared/prompts.ts";
 import { compareResumeToPosting, norm } from "./fit.ts";
 
 const MAX_PDF_BASE64 = 7_000_000; // ~5 MB file
-const MAX_GAP_STAGES = 4;
-const LEVEL_TYPES = ["normal", "normal", "challenge", "boss"] as const;
+const MAX_GAP_STAGES = 3; // one stage per missing skill, never more than this
+// 6 fundamentals, then level 7 is the boss: a unit test of the six before it.
+const LEVEL_TYPES = ["normal", "normal", "normal", "normal", "normal", "normal", "boss"] as const;
 
 Deno.serve(handle(async (req) => {
   const userId = await requireUserId(req);

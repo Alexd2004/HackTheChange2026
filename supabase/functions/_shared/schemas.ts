@@ -71,8 +71,8 @@ export const mapSchema = {
           summary: str,
           levels: {
             type: "array",
-            minItems: 4,
-            maxItems: 4,
+            minItems: 7,
+            maxItems: 7,
             items: {
               type: "object",
               properties: {

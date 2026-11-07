@@ -49,11 +49,11 @@ You design a short learning game for someone applying to be a "${jobTitle}".
 Make ONE stage per skill below, in the same order, using the exact skill name in "skill".
 ${gaps.map((g) => `- ${g.name} (they have level ${g.have}/3, job needs ${g.need}/3)`).join("\n")}
 
-Each stage has exactly 4 levels in this order:
-1. normal: the basics
-2. normal: the next building block
-3. challenge: apply levels 1-2 quickly
-4. boss: a realistic on-the-job scenario mixing everything
+Each stage has exactly 7 levels in this order:
+- levels 1 to 6 (type normal): the fundamentals of the skill, ordered from the very basics up to the more advanced ideas.
+  Each level teaches NEW concepts that the earlier levels did not.
+- level 7 (boss): a final exam for the stage. It is NOT about testing code. It re-tests what levels 1 to 6 taught,
+  set in a realistic on-the-job scenario. Its concepts must come from levels 1 to 6, with no new topics.
 For every level: a fun short title (max 5 words), a one-sentence objective, and 2-4 concrete concepts
 (specific things a quiz can test, e.g. "LEFT JOIN", not "databases").
 Stage title: max 4 words, game-like. Summary: one sentence.`;
@@ -61,7 +61,7 @@ Stage title: max 4 words, game-like. Summary: one sentence.`;
 const typeRules = {
   normal: "5 questions testing the basics of the concepts. Friendly, clear.",
   challenge: "6 harder questions that need applying the concepts, not just recalling them.",
-  boss: "8 scenario questions set at a real job. Each one mixes at least two concepts.",
+  boss: "8 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Together the questions must include at least one concept from EVERY earlier level, and each question should mix two concepts where it makes sense.",
 } as const;
 
 export const writeQuestionsPrompt = (p: {
@@ -71,13 +71,16 @@ export const writeQuestionsPrompt = (p: {
   objective: string;
   concepts: string[];
   weakConcepts: string[];
+  earlierLevels?: { title: string; concepts: string[] }[]; // boss only: what levels 1-6 taught
   count: number;
 }) => `
 Write quiz questions for a learning game.
 Skill: ${p.skill}
 Level: "${p.title}" (${p.type}). Objective: ${p.objective}
 Concepts to test: ${p.concepts.join(", ")}
-${p.weakConcepts.length ? `The player got these wrong before, so include some of them: ${p.weakConcepts.join(", ")}` : ""}
+${p.earlierLevels?.length ? `The earlier levels of this stage taught:
+${p.earlierLevels.map((l) => `- ${l.title}: ${l.concepts.join(", ")}`).join("\n")}
+` : ""}${p.weakConcepts.length ? `The player got these wrong before, so include some of them: ${p.weakConcepts.join(", ")}` : ""}
 
 Write exactly ${p.count} questions: ${typeRules[p.type]}
 Mix about 60% "mcq" and 40% "blank".
@@ -87,7 +90,7 @@ Mix about 60% "mcq" and 40% "blank".
   (e.g. ["GET", "get request"]); options = null and correct_index = null.
   The blank must have one short, unambiguous answer (a word or short phrase).
 - explanation: 1-2 sentences on why the answer is right.
-- concept: which concept from the list it tests.
+- concept: the name of one concept from the lists above (a concept name, never a level title).
 - difficulty: 1-3.
 Questions must be factually correct and answerable without seeing anything else.`;
 
