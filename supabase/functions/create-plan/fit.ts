@@ -42,7 +42,7 @@ export async function compareResumeToPosting(
     : [];
   const rated = await callGemini<ResumeRatings>(
     rateResumePrompt(postingSkills.map((s) => s.name), input.pdfBase64 ? undefined : input.resumeText),
-    ratingsSchema, resumeParts, 0.1,
+    ratingsSchema, resumeParts, 0.1, { logRaw: false }, // the reply quotes the resume
   );
   const haveByNumber = new Map<number, number>();
   for (const r of rated.ratings ?? []) {

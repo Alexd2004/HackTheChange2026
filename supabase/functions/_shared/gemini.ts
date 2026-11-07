@@ -20,6 +20,8 @@ export type Thinking = "minimal" | "low" | "high";
 
 export interface GeminiOptions {
   thinking?: Thinking; // default "low"
+  /** Log the start of an unreadable reply to help debugging. Set false when the reply contains a user's resume. */
+  logRaw?: boolean; // default true
 }
 
 export async function callGemini<T>(
@@ -52,7 +54,8 @@ export async function callGemini<T>(
       try {
         parsed = JSON.parse(text) as T;
       } catch {
-        console.warn(`Gemini returned unreadable JSON (attempt ${attempt}, ${text.length} chars): ${text.slice(0, RAW_LOG_CHARS)}`);
+        const raw = options.logRaw === false ? "(not logged: may contain a resume)" : text.slice(0, RAW_LOG_CHARS);
+        console.warn(`Gemini returned unreadable JSON (attempt ${attempt}, ${text.length} chars): ${raw}`);
         lastError = new Error("unreadable JSON");
         continue; // retry straight away, a fresh sample usually fixes it
       }
