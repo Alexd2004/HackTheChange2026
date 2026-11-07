@@ -8,6 +8,7 @@ import { searchResources } from "../_shared/keenable.ts";
 import { questionsSchema, verifySchema, type DraftQuestion, type DraftQuestions, type Verification } from "../_shared/schemas.ts";
 import { verifyQuestionsPrompt, writeQuestionsPrompt } from "../_shared/prompts.ts";
 import { blankMatches } from "../_shared/grading.ts";
+import { shuffleOptions } from "./shuffle.ts";
 
 const COUNT = { normal: 5, challenge: 6, boss: 8 } as const;
 const MIN = { normal: 4, challenge: 5, boss: 6 } as const;
@@ -131,7 +132,9 @@ function cleanQuestion(q: DraftQuestion): DraftQuestion | null {
     const ci = q.correct_index;
     if (options.length !== 4 || options.some((o) => !o) || new Set(options).size !== 4) return null;
     if (ci === null || ci === undefined || ci < 0 || ci > 3) return null;
-    return { ...base, kind: "mcq", options, correct_index: ci, answers: null };
+    // Gemini tends to put the right answer in the same spot, so shuffle here (before verification sees it).
+    const shuffled = shuffleOptions(options, ci);
+    return { ...base, kind: "mcq", options: shuffled.options, correct_index: shuffled.correct_index, answers: null };
   }
   if (q.kind === "blank") {
     const answers = (q.answers ?? []).map((a) => String(a).trim()).filter(Boolean).slice(0, 4);

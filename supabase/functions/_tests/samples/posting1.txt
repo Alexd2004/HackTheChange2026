@@ -1,0 +1,4 @@
+Junior Full-Stack Developer, Bow River Software (Calgary, AB)
+We are hiring a junior developer to build web features for Alberta small businesses.
+Required: React, TypeScript, REST APIs, SQL, Git. Nice to have: Docker, AWS basics, Agile experience.
+You will work in a team of five, review code, and ship weekly releases.

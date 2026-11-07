@@ -1,0 +1,6 @@
+{
+  "tasks": {
+    "test": "deno test --allow-read --allow-env --allow-net shuffle_test.ts stage_skills_test.ts gemini_test.ts",
+    "live": "deno test --allow-read --allow-env --allow-net --env-file=../.env keenable_live_test.ts fit_live_test.ts map_live_test.ts shuffle_live_test.ts"
+  }
+}
