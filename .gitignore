@@ -44,3 +44,5 @@ example
 
 
 .env
+# Supabase CLI local link cache
+supabase/.temp/

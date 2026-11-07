@@ -103,3 +103,72 @@ export interface CompleteLevelResult {
   xp: number;
   next_level_id: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Step 0 contracts (docs/BACKEND_SPLIT.md). Agreed by both people.
+// Append-only from here: add new types below, don't change these without telling the other person.
+// ---------------------------------------------------------------------------
+
+/** Input for the revamp-resume Edge Function (Person A). The resume comes from the phone, never the database. */
+export interface RevampResumeInput {
+  plan_id: string;
+  resume: { pdfBase64: string } | { text: string };
+}
+
+export interface ResumeItem {
+  heading: string; // e.g. job title or degree
+  subheading: string; // e.g. company or school
+  dates: string;
+  bullets: string[];
+}
+
+export interface ResumeSection {
+  title: string; // e.g. "Experience", "Education", "Projects"
+  items: ResumeItem[];
+}
+
+export interface ResumeChange {
+  type: "added_skill" | "reworded" | "reordered" | "removed";
+  where: string; // e.g. "Experience > Junior Developer"
+  before?: string;
+  after: string;
+  reason: string;
+}
+
+/** Output of revamp-resume. Errors come back as { error } with 400 / 404 / 409 (no boss beaten) / 502. */
+export interface RevampedResume {
+  contact: string;
+  headline: string;
+  summary: string;
+  skills: string[];
+  added_skills: string[]; // computed in code: skills earned by beating stage bosses
+  sections: ResumeSection[];
+  changes: ResumeChange[];
+}
+
+/** profiles table (Person B, migration 002). One row per user, guests included. */
+export interface Profile {
+  id: string; // auth user id
+  display_name: string | null;
+  current_plan_id: string | null;
+  total_xp: number;
+  streak: number;
+  last_active_date: string | null; // YYYY-MM-DD (UTC)
+  created_at: string;
+}
+
+/** resource_opens table (Person B, migration 002). One row per resource opened. */
+export interface ResourceOpen {
+  resource_id: string;
+  level_id: string;
+  question_id: string | null;
+  run_id: string; // one id per play of a level
+  duration_ms: number | null;
+}
+
+/** Account state shown in the app (Person B, src/lib/auth.ts). */
+export interface AuthState {
+  userId: string | null;
+  email: string | null; // null = guest
+  isGuest: boolean;
+}
