@@ -68,6 +68,15 @@ const typeRules = {
   boss: "8 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Together the questions must include at least one concept from EVERY earlier level, and each question should mix two concepts where it makes sense.",
 } as const;
 
+/** Early levels are gentle and later ones harder, so the six fundamentals levels build up to the boss. */
+function difficultyForPosition({ n, of }: { n: number; of: number }): string {
+  const where = `This is level ${n} of ${of} in the stage, so`;
+  const share = n / of;
+  if (share <= 1 / 3) return `${where} keep it gentle: almost all difficulty 1, plain wording, the most basic form of each concept.`;
+  if (share <= 2 / 3) return `${where} mix difficulty 1 and 2, and start applying the concepts to small examples.`;
+  return `${where} make it harder: mostly difficulty 2 with one or two difficulty 3, applying the concepts to realistic examples.`;
+}
+
 export const writeQuestionsPrompt = (p: {
   skill: string;
   type: "normal" | "challenge" | "boss";
@@ -76,6 +85,7 @@ export const writeQuestionsPrompt = (p: {
   concepts: string[];
   weakConcepts: string[];
   earlierLevels?: { title: string; concepts: string[] }[]; // boss only: what levels 1-6 taught
+  position?: { n: number; of: number }; // normal levels: this is fundamentals level n of `of` in the stage
   count: number;
 }) => `
 Write quiz questions for a learning game.
@@ -87,13 +97,14 @@ ${p.earlierLevels.map((l) => `- ${l.title}: ${l.concepts.join(", ")}`).join("\n"
 ` : ""}${p.weakConcepts.length ? `The player got these wrong before, so include some of them: ${p.weakConcepts.join(", ")}` : ""}
 
 Write exactly ${p.count} questions: ${typeRules[p.type]}
+${p.position ? `${difficultyForPosition(p.position)}\n` : ""}Keep each question to one or two short sentences, and every answer option short.
 Mix about 60% "mcq" and 40% "blank".
 - mcq: exactly 4 options, exactly one correct, give its correct_index (0-3), answers = null.
   Vary which position is correct. Wrong options must be plausible but clearly wrong.
 - blank: the prompt contains "____" exactly once; answers = 1-4 short accepted variants
   (e.g. ["GET", "get request"]); options = null and correct_index = null.
   The blank must have one short, unambiguous answer (a word or short phrase).
-- explanation: 1-2 sentences on why the answer is right.
+- explanation: ONE short sentence on why the answer is right (under 120 characters).
 - concept: the name of one concept from the lists above (a concept name, never a level title).
 - difficulty: 1-3.
 Questions must be factually correct and answerable without seeing anything else.`;

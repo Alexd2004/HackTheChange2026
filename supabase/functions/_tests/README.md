@@ -12,7 +12,8 @@ From the project root:
 ```
 cd supabase/functions/_tests
 deno task test      # offline: no API keys, no network calls to Google, takes a few seconds
-deno task live      # live: calls the real Gemini and Keenable APIs, takes about 30 seconds
+deno task live      # live: calls the real Gemini and Keenable APIs, takes about 40 seconds
+deno task check     # type-checks the create-plan and generate-level functions
 ```
 
 The first run downloads dependencies, so it is slower.
@@ -36,6 +37,7 @@ A test is skipped if its key is missing.
 | `fit_live_test.ts` | Sample resumes vs sample postings: PostgreSQL counts as SQL, a career changer has gaps, "Power BI or Tableau" is one skill, a strong resume has almost no gaps |
 | `map_live_test.ts` | The map has 3 stages of 7 levels, and the boss questions cover the earlier levels |
 | `shuffle_live_test.ts` | Shuffled multiple-choice questions still pass the verification call |
+| `question_quality_live_test.ts` | Level 6 of 6 is harder than level 1 of 6, questions stay short, and the numbers are printed next to the mock level file |
 
 The samples in `samples/` are made-up people and postings, not real data.
 

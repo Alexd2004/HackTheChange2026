@@ -24,24 +24,30 @@ Deno.serve(handle(async (req) => {
 
   // Load the level + stage + skill + plan, and check the caller owns it.
   const levelRes = await admin.from("levels")
-      .select("id, type, title, objective, concepts, generated, stage:stages!inner(id, plan_id, skill:skills!inner(name), plan:plans!inner(user_id))")
+      .select("id, idx, type, title, objective, concepts, generated, stage:stages!inner(id, plan_id, skill:skills!inner(name), plan:plans!inner(user_id))")
       .eq("id", levelId).maybeSingle();
   if (levelRes.error) throw new Error(`load level: ${levelRes.error.message}`);
   const level = levelRes.data as unknown as {
-    id: string; type: LevelType; title: string; objective: string; concepts: string[]; generated: boolean;
+    id: string; idx: number; type: LevelType; title: string; objective: string; concepts: string[]; generated: boolean;
     stage: { id: string; plan_id: string; skill: { name: string }; plan: { user_id: string } };
   } | null;
   if (!level || level.stage.plan.user_id !== userId) throw new UserError("Level not found.", 404);
   if (level.generated) return json({ ok: true });
 
-  const weakConcepts = await findWeakConcepts(userId, level.stage.plan_id);
   const skill = level.stage.skill.name;
-  // The boss is the unit test for its stage, so it needs to know what the earlier levels taught.
-  const earlierLevels = level.type === "boss" ? await loadEarlierLevels(level.stage.id) : [];
+  const [weakConcepts, stageLevels] = await Promise.all([
+    findWeakConcepts(userId, level.stage.id),
+    loadStageLevels(level.stage.id),
+  ]);
+  const fundamentals = stageLevels.filter((l) => l.type !== "boss");
+  // The boss is the final exam for its stage, so it needs to know what the earlier levels taught.
+  const earlierLevels = level.type === "boss" ? fundamentals : [];
+  // A fundamentals level knows its place in the stage, so early levels are easier than later ones.
+  const position = level.type === "boss" ? undefined : { n: level.idx + 1, of: fundamentals.length };
 
   // Questions (write + verify) and resources run in parallel.
   const [questions, resources] = await Promise.all([
-    makeQuestions(level, skill, weakConcepts, earlierLevels),
+    makeQuestions(level, skill, weakConcepts, earlierLevels, position),
     searchResources(`${skill} ${level.objective} tutorial`),
   ]);
 
@@ -57,24 +63,24 @@ Deno.serve(handle(async (req) => {
   return json({ ok: true });
 }));
 
-/** Title and concepts of the non-boss levels in a stage, in play order. */
-async function loadEarlierLevels(stageId: string): Promise<{ title: string; concepts: string[] }[]> {
-  const res = await admin.from("levels").select("title, concepts").eq("stage_id", stageId).neq("type", "boss").order("idx");
+/** Every level in a stage, in play order. */
+async function loadStageLevels(stageId: string): Promise<{ type: LevelType; title: string; concepts: string[] }[]> {
+  const res = await admin.from("levels").select("type, title, concepts").eq("stage_id", stageId).order("idx");
   if (res.error) {
-    console.warn("earlier levels query failed:", res.error.message);
+    console.warn("stage levels query failed:", res.error.message);
     return [];
   }
-  return (res.data ?? []).map((l) => ({ title: l.title, concepts: l.concepts ?? [] }));
+  return (res.data ?? []).map((l) => ({ type: l.type as LevelType, title: l.title, concepts: l.concepts ?? [] }));
 }
 
-/** Concepts the user answered wrong anywhere in this plan (most frequent first, max 4). */
-async function findWeakConcepts(userId: string, planId: string): Promise<string[]> {
+/** Concepts the user answered wrong in this stage (most frequent first, max 4). Other stages teach other skills. */
+async function findWeakConcepts(userId: string, stageId: string): Promise<string[]> {
   const res = await admin
     .from("attempts")
-    .select("question:questions!inner(concept, level:levels!inner(stage:stages!inner(plan_id)))")
+    .select("question:questions!inner(concept, level:levels!inner(stage_id))")
     .eq("user_id", userId)
     .eq("correct", false)
-    .eq("question.level.stage.plan_id", planId)
+    .eq("question.level.stage_id", stageId)
     .limit(200);
   if (res.error) {
     console.warn("weak concepts query failed:", res.error.message);
@@ -94,6 +100,7 @@ async function makeQuestions(
   skill: string,
   weakConcepts: string[],
   earlierLevels: { title: string; concepts: string[] }[],
+  position: { n: number; of: number } | undefined,
 ): Promise<DraftQuestion[]> {
   const target = COUNT[level.type];
   let kept: DraftQuestion[] = [];
@@ -101,7 +108,7 @@ async function makeQuestions(
   for (let round = 1; round <= 2 && kept.length < MIN[level.type]; round++) {
     const draft = await callGemini<DraftQuestions>(
       writeQuestionsPrompt({ skill, type: level.type, title: level.title, objective: level.objective,
-        concepts: level.concepts, weakConcepts, earlierLevels, count: target }),
+        concepts: level.concepts, weakConcepts, earlierLevels, position, count: target }),
       questionsSchema, [], 0.8,
     );
     const valid = (draft.questions ?? []).map(cleanQuestion).filter((q): q is DraftQuestion => q !== null);
