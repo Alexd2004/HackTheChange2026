@@ -10,6 +10,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import {
   completeLevel, ensureLevelGenerated, getLevelBundle, getPlanBundle, prefetchNextLevel, recordAttempt,
 } from "@/lib/api";
+import { newRunId, recordResourceOpen } from "@/lib/analytics";
 import {
   BOSS_HEARTS, PASS_PCT, bossMaxHp, challengeSeconds, correctAnswerText, hintFor, isCorrect, scorePct, xpFor,
 } from "@/lib/grading";
@@ -35,6 +36,11 @@ async function loadLevel(id: string, onGenerating: () => void): Promise<LevelBun
   }
   if (b.questions.length === 0) throw new Error("This level has no questions yet. Please try again.");
   return b;
+}
+
+/** Stores the current time in a ref (outside the component so it isn't treated as render code). */
+function markNow(ref: { current: number }) {
+  ref.current = Date.now();
 }
 
 const haptic = (kind: "good" | "bad") => {
@@ -65,6 +71,11 @@ export default function LevelScreen() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [showResources, setShowResources] = useState(false);
 
+  // Analytics: one run id per play of this level; when the current question appeared.
+  // (Both are set when the level finishes loading, before any question is shown.)
+  const runIdRef = useRef("");
+  const questionStartRef = useRef(0);
+
   const shake = useSharedValue(0);
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 
@@ -77,6 +88,8 @@ export default function LevelScreen() {
           setQIndex(0); setSelected(null); setTyped(""); setRevealed(false); setHint(null);
           setCorrectCount(0); setHearts(BOSS_HEARTS); setHp(bossMaxHp(b.questions.length));
           setTimeLeft(challengeSeconds(extendedTime));
+          runIdRef.current = newRunId();
+          questionStartRef.current = Date.now();
           setPhase("playing");
           // Prefetch the next level's questions in the background.
           getPlanBundle(b.plan_id).then((pb) => prefetchNextLevel(pb, id)).catch(() => {});
@@ -107,7 +120,11 @@ export default function LevelScreen() {
     const ok = isCorrect(q, answer);
     setLastCorrect(ok);
     setRevealed(true);
-    recordAttempt(q.id, ok);
+    recordAttempt(q.id, ok, {
+      runId: runIdRef.current,
+      timeMs: Date.now() - questionStartRef.current,
+      answer: answer === null ? "(time ran out)" : typeof answer === "number" ? q.options?.[answer] ?? String(answer) : answer,
+    });
     if (ok) {
       setCorrectCount((c) => c + 1);
       if (isBoss) setHp((h) => Math.max(0, h - 1));
@@ -150,6 +167,7 @@ export default function LevelScreen() {
     setQIndex((i) => i + 1);
     setSelected(null); setTyped(""); setRevealed(false); setHint(null);
     setTimeLeft(challengeSeconds(extendedTime));
+    markNow(questionStartRef);
   }
 
   async function finish() {
@@ -157,7 +175,7 @@ export default function LevelScreen() {
     const score = scorePct(correctCount, total);
     const passed = isBoss ? hp === 0 : score >= PASS_PCT;
     const xp = xpFor(correctCount, type);
-    let after = null as null | { match_pct: number; next_level_id: string | null };
+    let after = null as null | { match_pct: number; next_level_id: string | null; xp_awarded?: number };
     const before = await getPlanBundle(bundle.plan_id).then((p) => p.plan.match_pct).catch(() => null);
     if (passed) {
       setPhase("saving");
@@ -178,7 +196,8 @@ export default function LevelScreen() {
         score: String(score),
         correct: String(correctCount),
         total: String(total),
-        xp: String(passed ? xp : 0),
+        // Server decides the XP (0 when replaying without beating your best score).
+        xp: String(passed ? after?.xp_awarded ?? xp : 0),
         passed: passed ? "1" : "0",
         before: String(before ?? after?.match_pct ?? 0),
         after: String(after?.match_pct ?? before ?? 0),
@@ -297,7 +316,17 @@ export default function LevelScreen() {
           )}
         </View>
 
-        <ResourceSheet visible={showResources} resources={bundle.resources} onClose={() => setShowResources(false)} />
+        <ResourceSheet
+          visible={showResources}
+          resources={bundle.resources}
+          onClose={() => setShowResources(false)}
+          onOpened={(r, durationMs) =>
+            recordResourceOpen({
+              resource_id: r.id, level_id: bundle.level.id, question_id: q.id,
+              run_id: runIdRef.current, duration_ms: durationMs,
+            })
+          }
+        />
       </Screen>
     </KeyboardAvoidingView>
   );
