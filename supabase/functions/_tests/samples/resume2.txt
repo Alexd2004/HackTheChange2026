@@ -1,0 +1,8 @@
+Sam Okafor | sam.okafor@example.com | 587-555-0199
+Petroleum Engineering Technologist, Foothills Energy (2018-2025)
+- Tracked well production data in Excel with pivot tables and macros for weekly reports.
+- Automated report cleanup with short Python scripts (pandas basics).
+- Presented monthly results to operations managers.
+EDUCATION: Diploma, Petroleum Engineering Technology, SAIT (2018)
+CERTIFICATES: Intro to SQL (online course, 2025)
+SKILLS: Excel, Python (beginner), data reporting, communication

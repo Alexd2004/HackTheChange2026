@@ -1,0 +1,4 @@
+Data Analyst, Rimrock Energy (Calgary, AB)
+Join our operations team to turn field and production data into decisions.
+Required: SQL, Python, Excel, data visualization (Power BI or Tableau), statistics. You must communicate findings to non-technical managers.
+Nice to have: cloud data platforms such as Azure.

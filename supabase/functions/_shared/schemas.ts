@@ -4,25 +4,6 @@
 const str = { type: "string" };
 const int = (min: number, max: number) => ({ type: "integer", minimum: min, maximum: max });
 
-// ---- extractResume
-export interface ResumeSkills {
-  skills: { name: string; level: number; evidence: string }[];
-}
-export const resumeSchema = {
-  type: "object",
-  properties: {
-    skills: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { name: str, level: int(0, 3), evidence: str },
-        required: ["name", "level", "evidence"],
-      },
-    },
-  },
-  required: ["skills"],
-};
-
 // ---- extractPosting
 export interface PostingSkills {
   job_title: string;
@@ -46,23 +27,26 @@ export const postingSchema = {
   required: ["job_title", "company", "skills"],
 };
 
-// ---- matchSkills
-export interface SkillMatches {
-  matches: { posting_skill: string; resume_skill: string | null }[];
+// ---- rateResume
+// The resume is rated against the numbered list of posting skills. `n` is the 1-based position in that list,
+// so a rating can never be lost to a naming mismatch ("PostgreSQL (SQL)" vs "SQL").
+export interface ResumeRatings {
+  ratings: { n: number; evidence: string; have_level: number }[];
 }
-export const matchSchema = {
+export const ratingsSchema = {
   type: "object",
   properties: {
-    matches: {
+    ratings: {
       type: "array",
       items: {
         type: "object",
-        properties: { posting_skill: str, resume_skill: { type: ["string", "null"] } },
-        required: ["posting_skill", "resume_skill"],
+        // `evidence` comes before the level so the model cites the resume first, then rates.
+        properties: { n: { type: "integer", minimum: 1 }, evidence: str, have_level: int(0, 3) },
+        required: ["n", "evidence", "have_level"],
       },
     },
   },
-  required: ["matches"],
+  required: ["ratings"],
 };
 
 // ---- buildMap
@@ -87,8 +71,8 @@ export const mapSchema = {
           summary: str,
           levels: {
             type: "array",
-            minItems: 4,
-            maxItems: 4,
+            minItems: 7,
+            maxItems: 7,
             items: {
               type: "object",
               properties: {
@@ -105,6 +89,26 @@ export const mapSchema = {
     },
   },
   required: ["stages"],
+};
+
+// ---- pickResources
+// Picks are by the result's 1-based number, so the model can't invent a link.
+export interface PickedResources {
+  picks: { i: number; why: string }[];
+}
+export const pickSchema = {
+  type: "object",
+  properties: {
+    picks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { i: { type: "integer", minimum: 1 }, why: str },
+        required: ["i", "why"],
+      },
+    },
+  },
+  required: ["picks"],
 };
 
 // ---- writeQuestions

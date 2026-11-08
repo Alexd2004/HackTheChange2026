@@ -3,19 +3,15 @@
 // The resume itself is never stored, only the extracted skills.
 import { handle, json, UserError } from "../_shared/cors.ts";
 import { admin, must, ok, requireUserId } from "../_shared/supabase.ts";
-import { callGemini, type Part } from "../_shared/gemini.ts";
-import {
-  mapSchema, matchSchema, postingSchema, resumeSchema,
-  type MapPlan, type PostingSkills, type ResumeSkills, type SkillMatches,
-} from "../_shared/schemas.ts";
-import { buildMapPrompt, extractPostingPrompt, extractResumePrompt, matchSkillsPrompt } from "../_shared/prompts.ts";
+import { callGemini } from "../_shared/gemini.ts";
+import { mapSchema, type MapPlan } from "../_shared/schemas.ts";
+import { buildMapPrompt } from "../_shared/prompts.ts";
+import { compareResumeToPosting, norm, pickStageSkills } from "./fit.ts";
 
 const MAX_PDF_BASE64 = 7_000_000; // ~5 MB file
-const MAX_GAP_STAGES = 4;
-const LEVEL_TYPES = ["normal", "normal", "challenge", "boss"] as const;
-
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(Number(n) || 0)));
-const norm = (s: string) => s.toLowerCase().trim();
+const MAX_GAP_STAGES = 3; // one stage per missing skill, never more than this
+// 6 fundamentals, then level 7 is the boss: a unit test of the six before it.
+const LEVEL_TYPES = ["normal", "normal", "normal", "normal", "normal", "normal", "boss"] as const;
 
 Deno.serve(handle(async (req) => {
   const userId = await requireUserId(req);
@@ -31,56 +27,16 @@ Deno.serve(handle(async (req) => {
   if (pdf && pdf.length > MAX_PDF_BASE64) throw new UserError("That PDF is too big. Try a file under 5 MB.");
   if (resumeText && resumeText.length > 30000) throw new UserError("That resume text is too long.");
 
-  // 1 + 2 in parallel: read the resume and the posting.
-  const resumeParts: Part[] = pdf ? [{ inlineData: { mimeType: "application/pdf", data: pdf } }] : [];
-  const [resumeOut, postingOut] = await Promise.all([
-    callGemini<ResumeSkills>(extractResumePrompt(pdf ? undefined : resumeText), resumeSchema, resumeParts, 0.1),
-    callGemini<PostingSkills>(extractPostingPrompt(posting), postingSchema, [], 0.1),
-  ]);
+  // 1-3. Read the posting, rate the resume against it, and work out the gaps (see fit.ts).
+  const fit = await compareResumeToPosting({ posting, pdfBase64: pdf, resumeText });
+  const { skills, match_pct: matchPct } = fit;
 
-  const postingSkills = dedupe(postingOut.skills ?? [], (s) => norm(s.name)).slice(0, 12);
-  if (postingSkills.length === 0) throw new UserError("We couldn't find any skills in that posting. Is it the full description?");
-  const resumeSkills = dedupe(resumeOut.skills ?? [], (s) => norm(s.name));
+  // 4. Which skills become stages: the top gaps, or (if there are none) the skills to polish. See fit.ts.
+  const { mode, skills: stageSkills } = pickStageSkills(skills, MAX_GAP_STAGES);
 
-  // 3. Match posting skills to resume skills by meaning (AI), then gap math in code.
-  const matches = resumeSkills.length
-    ? await callGemini<SkillMatches>(
-        matchSkillsPrompt(postingSkills.map((s) => s.name), resumeSkills.map((s) => s.name)),
-        matchSchema, [], 0,
-      )
-    : { matches: [] };
-  const resumeByName = new Map(resumeSkills.map((s) => [norm(s.name), s]));
-  const matchByPosting = new Map(matches.matches.map((m) => [norm(m.posting_skill), m.resume_skill]));
-
-  const skills = postingSkills.map((p) => {
-    const matched = matchByPosting.get(norm(p.name));
-    const have = matched ? clamp(resumeByName.get(norm(matched))?.level ?? 0, 0, 3) : 0;
-    const need = clamp(p.need_level, 1, 3);
-    return {
-      name: p.name.trim(),
-      weight: clamp(p.weight, 1, 3),
-      required: !!p.required,
-      have_level: have,
-      need_level: need,
-      is_gap: have < need,
-    };
-  });
-
-  const totalWeight = skills.reduce((a, s) => a + s.weight, 0);
-  const haveWeight = skills.filter((s) => !s.is_gap).reduce((a, s) => a + s.weight, 0);
-  const matchPct = totalWeight ? Math.round((100 * haveWeight) / totalWeight) : 0;
-
-  // 4. Top gaps: required first, then weight, then biggest level difference.
-  const gaps = skills
-    .filter((s) => s.is_gap)
-    .sort((a, b) =>
-      Number(b.required) - Number(a.required) || b.weight - a.weight ||
-      (b.need_level - b.have_level) - (a.need_level - a.have_level))
-    .slice(0, MAX_GAP_STAGES);
-
-  const map = gaps.length
+  const map = stageSkills.length
     ? await callGemini<MapPlan>(
-        buildMapPrompt(postingOut.job_title, gaps.map((g) => ({ name: g.name, have: g.have_level, need: g.need_level }))),
+        buildMapPrompt(fit.job_title, stageSkills.map((g) => ({ name: g.name, have: g.have_level, need: g.need_level })), mode),
         mapSchema, [], 0.7,
       )
     : { stages: [] };
@@ -89,8 +45,8 @@ Deno.serve(handle(async (req) => {
   const plan = must(
     await admin.from("plans").insert({
       user_id: userId,
-      job_title: (postingOut.job_title || "Your target role").slice(0, 120),
-      company: postingOut.company?.slice(0, 120) || null,
+      job_title: (fit.job_title || "Your target role").slice(0, 120),
+      company: fit.company?.slice(0, 120) || null,
       match_pct: matchPct,
       start_match_pct: matchPct,
     }).select("id").single(),
@@ -104,9 +60,9 @@ Deno.serve(handle(async (req) => {
     );
     const skillIdByName = new Map(insertedSkills.map((s) => [norm(s.name), s.id]));
 
-    for (let i = 0; i < gaps.length; i++) {
-      const gap = gaps[i];
-      // Match the AI's stage to the gap by name, falling back to position.
+    for (let i = 0; i < stageSkills.length; i++) {
+      const gap = stageSkills[i];
+      // Match the AI's stage to its skill by name, falling back to position.
       const st = map.stages.find((s) => norm(s.skill) === norm(gap.name)) ?? map.stages[i];
       const stage = must(
         await admin.from("stages").insert({
@@ -114,7 +70,7 @@ Deno.serve(handle(async (req) => {
           skill_id: skillIdByName.get(norm(gap.name)),
           idx: i,
           title: st?.title?.slice(0, 60) || gap.name,
-          summary: st?.summary?.slice(0, 240) || `Level up your ${gap.name}.`,
+          summary: st?.summary?.slice(0, 240) || (mode === "polish" ? `Review your ${gap.name}.` : `Level up your ${gap.name}.`),
         }).select("id").single(),
         "insert stage",
       );
@@ -141,13 +97,3 @@ Deno.serve(handle(async (req) => {
 
   return json({ plan_id: plan.id });
 }));
-
-function dedupe<T>(items: T[], key: (t: T) => string): T[] {
-  const seen = new Set<string>();
-  return items.filter((t) => {
-    const k = key(t);
-    if (!k || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-}

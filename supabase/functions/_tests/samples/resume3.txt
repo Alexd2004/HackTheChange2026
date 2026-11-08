@@ -1,0 +1,8 @@
+Riley Chen | riley.chen@example.com | 403-555-0171
+SENIOR SOFTWARE DEVELOPER, Northern Lights Software, Calgary (2020-2025)
+- Led a team of 5 building a React and TypeScript web app used by 40,000 customers.
+- Designed and documented REST APIs in Node/Express backed by PostgreSQL; wrote complex SQL queries and migrations.
+- Containerized services with Docker and deployed to AWS (EC2, S3, RDS); built CI pipelines.
+- Ran sprints as the team's Scrum lead in an Agile environment; reviewed pull requests daily using Git.
+EDUCATION: BSc Computer Science, University of Calgary
+SKILLS: React, TypeScript, Node.js, REST APIs, SQL, PostgreSQL, Git, Docker, AWS, Agile/Scrum

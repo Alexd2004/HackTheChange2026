@@ -1,0 +1,10 @@
+Jordan Lee | jordan.lee@example.com | 403-555-0142 | github.com/jordanlee
+EDUCATION: BSc Computer Science, University of Calgary (2021-2025)
+EXPERIENCE
+Software Developer Intern, Prairie Logistics (May-Aug 2024)
+- Built features for a React and TypeScript dashboard used by dispatchers.
+- Wrote Node/Express endpoints backed by a PostgreSQL database; wrote queries with joins and indexes.
+- Used Git and pull requests daily on a team of 6.
+PROJECTS
+- Trail Buddy: full-stack hiking app (React, Express, PostgreSQL), deployed on a VPS.
+SKILLS: JavaScript, TypeScript, React, Node.js, PostgreSQL, Git, HTML/CSS
