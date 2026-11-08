@@ -1,8 +1,9 @@
 // Quiz screen for one level. Modes:
 //   normal    hints + resources allowed, pass at 60%
 //   challenge 20 s per question (40 s with "Longer timers"), no resources, 2× XP, pass at 60%
-//   boss      boss HP bar + 3 hearts; win by landing enough hits before your hearts run out
-import { BossHPBar } from "@/components/BossHPBar";
+//   boss      monkey vs boss scene, 3 HP each, same countdown as challenge; a right answer hits the
+//             boss, a wrong one (or running out of time) hits you
+import { BattleScene } from "@/components/BattleScene";
 import {
   Icon,
   PixelBackground,
@@ -32,9 +33,8 @@ import { levelTitle } from "@/lib/bosses";
 import {
   ADMIN_BYPASS,
   BOSS_HEARTS,
-  bossHearts,
+  BOSS_HP,
   PASS_PCT,
-  bossMaxHp,
   challengeSeconds,
   correctAnswerText,
   hintFor,
@@ -114,6 +114,8 @@ export default function LevelScreen() {
   const [correctCount, setCorrectCount] = useState(0);
   const [hearts, setHearts] = useState(BOSS_HEARTS);
   const [hp, setHp] = useState(1);
+  // Boss fight: one event per answer, played by BattleScene (who attacks, who takes the hit).
+  const [hit, setHit] = useState<{ id: number; monkeyWins: boolean } | null>(null);
   const [hint, setHint] = useState<{
     text: string;
     hiddenOption: number | null;
@@ -143,8 +145,9 @@ export default function LevelScreen() {
           setRevealed(false);
           setHint(null);
           setCorrectCount(0);
-          setHearts(bossHearts(b.questions.length));
-          setHp(bossMaxHp(b.questions.length));
+          setHearts(BOSS_HEARTS);
+          setHp(BOSS_HP);
+          setHit(null);
           setTimeLeft(challengeSeconds(extendedTime));
           runIdRef.current = newRunId();
           questionStartRef.current = Date.now();
@@ -182,6 +185,7 @@ export default function LevelScreen() {
   const total = questions.length;
   const isBoss = type === "boss";
   const isChallenge = type === "challenge";
+  const isTimed = isChallenge || isBoss; // boss fights run on the same per-question countdown
 
   // ---- answer
   const submit = useCallback(
@@ -191,6 +195,7 @@ export default function LevelScreen() {
       setLastCorrect(ok);
       setRevealed(true);
       recordAttempt(q.id, ok);
+      if (isBoss) setHit((h) => ({ id: (h?.id ?? 0) + 1, monkeyWins: ok }));
       if (ok) {
         setCorrectCount((c) => c + 1);
         if (isBoss) setHp((h) => Math.max(0, h - 1));
@@ -219,7 +224,7 @@ export default function LevelScreen() {
     submitRef.current = submit;
   }, [submit]);
   useEffect(() => {
-    if (!isChallenge || phase !== "playing" || revealed || !q) return;
+    if (!isTimed || phase !== "playing" || revealed || !q) return;
     let left = challengeSeconds(extendedTime); // timeLeft was reset when this question started
     const t = setInterval(() => {
       left -= 1;
@@ -230,7 +235,7 @@ export default function LevelScreen() {
       }
     }, 1000);
     return () => clearInterval(t);
-  }, [isChallenge, phase, revealed, qIndex, q, extendedTime]);
+  }, [isTimed, phase, revealed, qIndex, q, extendedTime]);
 
   // ---- next / finish
   const bossOver = isBoss && (hp === 0 || hearts === 0);
@@ -330,7 +335,7 @@ export default function LevelScreen() {
   const timerTiles = Math.ceil(
     (10 * Math.max(0, timeLeft)) / challengeSeconds(extendedTime),
   );
-  const timedOut = isChallenge && timeLeft <= 0 && selected === null && !typed;
+  const timedOut = isTimed && timeLeft <= 0 && selected === null && !typed;
   const verdict = lastCorrect
     ? { text: "Correct!", icon: "check-circle" as const, color: c.grassDark }
     : timedOut
@@ -351,8 +356,8 @@ export default function LevelScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="w-full max-w-[480px] self-center px-4">
-            {/* Top bar */}
-            <View className="flex-row items-center justify-between pt-3">
+            {/* Top bar: close button, then the level title beside it */}
+            <View className="flex-row items-center gap-3 pt-3">
               <Pressable
                 onPress={() => router.back()}
                 accessibilityRole="button"
@@ -367,41 +372,54 @@ export default function LevelScreen() {
               >
                 <Icon name="close-thick" size={24} />
               </Pressable>
-              <View className="flex-row items-center gap-2">
-                <PixelTag label={levelTypeLabel[type]} />
-                {isChallenge && (
-                  <PixelTag label="2× XP" icon="lightning-bolt" />
-                )}
-                {isBoss && <PixelTag label="3× XP" icon="skull" />}
-              </View>
+              <Text
+                className="flex-1 text-center"
+                style={outlined(34, c.gold)}
+                accessibilityRole="header"
+              >
+                {levelTitle(bundle.level, bundle.stage.idx)}
+              </Text>
+              {/* No tags in boss fights: balance the close button so the title sits truly centered. */}
+              {isBoss && <View className="w-11" />}
+              {/* Boss fights drop the tags: the battle scene says it all. */}
+              {!isBoss && (
+                <View className="flex-row items-center gap-2">
+                  <PixelTag label={levelTypeLabel[type]} />
+                  {isChallenge && (
+                    <PixelTag label="2× XP" icon="lightning-bolt" />
+                  )}
+                </View>
+              )}
             </View>
 
-            <Text
-              className="mt-3"
-              style={outlined(34, c.gold)}
-              accessibilityRole="header"
-            >
-              {levelTitle(bundle.level, bundle.stage.idx)}
-            </Text>
-            <Text style={outlined(24)}>
+            <Text className="mt-2 text-center" style={outlined(24)}>
               Question {qIndex + 1} of {total} · {bundle.skill.name}
             </Text>
-            <View className="mt-3">
-              <TileBar
-                filled={qIndex + (revealed ? 1 : 0)}
-                total={total}
-                height={10}
-                label={`Question ${qIndex + 1} of ${total}`}
-              />
-            </View>
-
-            {isBoss && (
-              <View className="mt-4">
-                <BossHPBar maxHearts={bossHearts(total)} hp={hp} maxHp={bossMaxHp(total)} hearts={hearts} />
+            {/* Timed levels show only the countdown bar, not question progress. */}
+            {!isTimed && (
+              <View className="mt-3">
+                <TileBar
+                  filled={qIndex + (revealed ? 1 : 0)}
+                  total={total}
+                  height={10}
+                  label={`Question ${qIndex + 1} of ${total}`}
+                />
               </View>
             )}
 
-            {isChallenge && !revealed && (
+            {isBoss && (
+              <View className="mt-4">
+                <BattleScene
+                  bossNum={(bundle.stage.idx % 3) + 1}
+                  bossHp={hp}
+                  monkeyHp={hearts}
+                  maxHp={BOSS_HP}
+                  hit={hit}
+                />
+              </View>
+            )}
+
+            {isTimed && !revealed && (
               <View
                 className="mt-4 gap-1"
                 accessibilityLiveRegion={lowTime ? "assertive" : "none"}

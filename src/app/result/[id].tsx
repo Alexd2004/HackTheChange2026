@@ -121,8 +121,8 @@ export default function ResultScreen() {
       : p.bossLost === "1"
         ? "The boss won this round"
         : "Almost there";
-  const icon = bossWin ? "trophy" : passed ? "star" : "arm-flex";
-  const dancing = passed && !bossWin; // "Level complete!": the dancing monkey replaces the star box
+  // Every win (level complete, boss defeated, quest complete) gets the dancing monkey; a loss keeps the icon box.
+  const dancing = passed;
 
   const [danceIdx, setDanceIdx] = useState(0);
   useEffect(() => {
@@ -151,9 +151,9 @@ export default function ResultScreen() {
                 style={{ ...panel, backgroundColor: c.cream }}
               >
                 <Icon
-                  name={icon}
+                  name="arm-flex"
                   size={60}
-                  color={bossWin ? c.red : passed ? c.gold : c.wood}
+                  color={c.wood}
                 />
               </View>
             )}
