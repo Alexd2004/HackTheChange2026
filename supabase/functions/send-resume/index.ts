@@ -55,14 +55,16 @@ Deno.serve(handle(async (req) => {
   if (!plan.data || plan.data.user_id !== userId) throw new UserError("Plan not found.", 404);
 
   // ...and the player must have beaten at least one stage boss on it (server-side check).
-  // The beaten stages' skills are also the "skills you earned" listed in the email.
+  // The beaten stages' GAP skills are the "new skills you earned" listed in the email. Review (polish)
+  // stages are skills the resume already had, so they are not listed as new.
   const beaten = await admin.from("levels")
-    .select("id, stage:stages!inner(plan_id, skill:skills!inner(name))")
+    .select("id, stage:stages!inner(plan_id, skill:skills!inner(name, is_gap))")
     .eq("stage.plan_id", planId).eq("type", "boss").eq("status", "completed");
   if (beaten.error) throw new Error(`check boss: ${beaten.error.message}`);
   if (!beaten.data?.length) throw new UserError("Beat a stage boss first to unlock your revamped resume.", 409);
-  const earnedSkills = (beaten.data as unknown as { stage: { skill: { name: string } } }[])
-    .map((l) => l.stage?.skill?.name).filter((n): n is string => !!n);
+  const earnedSkills = (beaten.data as unknown as { stage: { skill: { name: string; is_gap: boolean } } }[])
+    .filter((l) => l.stage?.skill?.is_gap === true)
+    .map((l) => l.stage.skill.name).filter((n): n is string => !!n);
 
   // Reserve the send (locks, checks per-user + global limits, logs) BEFORE talking to SES.
   const domain = to.split("@")[1];

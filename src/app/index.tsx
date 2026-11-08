@@ -1,5 +1,5 @@
 // Upload screen: add a resume (PDF or pasted text) + paste a job posting → build the map.
-// Also: continue an existing plan and load the demo plan. Pixel theme shared with the landing.
+// Also: continue an existing plan. Pixel theme shared with the landing.
 import { Landing } from "@/components/Landing";
 import {
   field,
@@ -12,7 +12,6 @@ import { PlanList } from "@/components/PlanList";
 import { ProgressHeader } from "@/components/ProgressHeader";
 import {
   AppError,
-  importDemoPlan,
   listPlanSummaries,
   setPendingPlanInput,
   USE_MOCK,
@@ -76,7 +75,6 @@ export default function UploadScreen() {
   const [posting, setPosting] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [plans, setPlans] = useState<PlanSummary[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   // While a text field is focused the keyboard eats the screen: show only that field, hide the footer, offer a Done button.
@@ -181,25 +179,15 @@ export default function UploadScreen() {
     }, step * 2);
   }
 
-  async function loadDemo() {
-    setError(null);
-    setDemoLoading(true);
-    try {
-      const id = await importDemoPlan();
-      router.push({ pathname: "/plan/[id]", params: { id } }); // the map writes stages 2-3 in the background
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't load the demo plan.");
-    } finally {
-      setDemoLoading(false);
-    }
-  }
-
   // One background for landing and form: it stays mounted so the terrain doesn't flicker at the hand-off.
   return (
     <KeyboardAvoidingView
       className="flex-1"
       style={{ backgroundColor: c.grass }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      // Android is edge-to-edge (the window no longer resizes for the keyboard), so pad on both
+      // platforms. There's no ScrollView or window pan here, so the focused-field mode just fills
+      // the padded space: no double shift.
+      behavior="padding"
     >
       <PixelBackground grass>
         {!started ? (
@@ -482,23 +470,6 @@ export default function UploadScreen() {
                         to continue.
                       </Text>
                     )}
-                    <Pressable
-                      onPress={loadDemo}
-                      disabled={demoLoading}
-                      accessibilityRole="button"
-                      accessibilityLabel="Try the demo plan"
-                      accessibilityState={{ busy: demoLoading }}
-                      className="mt-4 min-h-[44px] items-center justify-center active:opacity-70"
-                    >
-                      <Text
-                        style={{
-                          ...font(20, c.cream),
-                          textDecorationLine: "underline",
-                        }}
-                      >
-                        {demoLoading ? "Loading demo…" : "Try the demo plan"}
-                      </Text>
-                    </Pressable>
                   </>
                 )}
               </Animated.View>

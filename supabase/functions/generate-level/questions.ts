@@ -1,16 +1,21 @@
 // Writes and checks the quiz questions for one level: Gemini writes them, code drops malformed ones, and a
 // second Gemini call answers each one without the key so wrong or ambiguous questions are dropped.
 // No database here, so it can be tested on its own.
-import { callGemini } from "../_shared/gemini.ts";
+import { callGemini, lightModel } from "../_shared/gemini.ts";
 import { UserError } from "../_shared/cors.ts";
 import { questionsSchema, verifySchema, type DraftQuestion, type DraftQuestions, type Verification } from "../_shared/schemas.ts";
 import { verifyQuestionsPrompt, writeQuestionsPrompt } from "../_shared/prompts.ts";
 import { blankMatches } from "../_shared/grading.ts";
 import { shuffleOptions } from "./shuffle.ts";
 
-const COUNT = { normal: 4, challenge: 4, boss: 4 } as const;
-const MIN = { normal: 3, challenge: 3, boss: 3 } as const;
-const ABSOLUTE_MIN = 3;
+// Questions a level ends up with. The boss (the stage's final exam) has more.
+const COUNT = { normal: 4, challenge: 4, boss: 6 } as const;
+// Fewer than MIN after round 1 and we write a second round.
+const MIN = { normal: 3, challenge: 3, boss: 5 } as const;
+// Fewer than this after both rounds and the level fails (the app retries).
+const ABSOLUTE_MIN = { normal: 3, challenge: 3, boss: 4 } as const;
+// Round 1 asks for a few spare questions, so a dropped question rarely costs a second round (2 more calls).
+const EXTRA_FIRST_ROUND = 2;
 
 export type LevelType = keyof typeof COUNT;
 
@@ -35,11 +40,22 @@ export async function makeQuestions(
   let kept: DraftQuestion[] = [];
 
   for (let round = 1; round <= 2 && kept.length < MIN[level.type]; round++) {
-    const draft = await callGemini<DraftQuestions>(
-      writeQuestionsPrompt({ skill, type: level.type, title: level.title, objective: level.objective,
-        concepts: level.concepts, weakConcepts, earlierLevels, position, count: target }),
-      questionsSchema, [], 0.8,
-    );
+    let draft: DraftQuestions;
+    try {
+      draft = await callGemini<DraftQuestions>(
+        writeQuestionsPrompt({ skill, type: level.type, title: level.title, objective: level.objective,
+          concepts: level.concepts, weakConcepts, earlierLevels, position,
+          count: round === 1 ? target + EXTRA_FIRST_ROUND : target }),
+        questionsSchema, [], 0.8,
+      );
+    } catch (err) {
+      // Round 2 is only a top-up: if it fails, round 1's questions are still good enough to play.
+      if (round > 1 && kept.length >= ABSOLUTE_MIN[level.type]) {
+        console.warn(`second question round failed, keeping ${kept.length} questions:`, err instanceof Error ? err.message : err);
+        break;
+      }
+      throw err;
+    }
     const valid = (draft.questions ?? []).map(cleanQuestion).filter((q): q is DraftQuestion => q !== null);
     const verified = await verify(valid);
     report?.({ round, written: draft.questions?.length ?? 0, wellFormed: valid.length, verified: verified.length });
@@ -48,7 +64,7 @@ export async function makeQuestions(
     kept = [...kept, ...verified.filter((q) => !seen.has(q.prompt))];
   }
 
-  if (kept.length < ABSOLUTE_MIN) {
+  if (kept.length < ABSOLUTE_MIN[level.type]) {
     throw new UserError("The AI couldn't write good questions for this level. Please try again.", 502);
   }
   return kept.slice(0, target);
@@ -84,13 +100,25 @@ function cleanQuestion(q: DraftQuestion): DraftQuestion | null {
   return null;
 }
 
-/** Second Gemini call answers each question without the key; keep only questions it gets right. */
+/**
+ * Second Gemini call answers each question without the key; keep only questions it gets right.
+ * If the check itself fails (rate limit, timeout, server error, unreadable reply), the well-formed questions
+ * are kept unchecked rather than throwing away the call that wrote them.
+ */
 async function verify(questions: DraftQuestion[]): Promise<DraftQuestion[]> {
   if (questions.length === 0) return [];
-  const check = await callGemini<Verification>(
-    verifyQuestionsPrompt(questions.map((q, idx) => ({ idx, kind: q.kind, prompt: q.prompt, options: q.options }))),
-    verifySchema, [], 0,
-  );
+  let check: Verification;
+  try {
+    check = await callGemini<Verification>(
+      verifyQuestionsPrompt(questions.map((q, idx) => ({ idx, kind: q.kind, prompt: q.prompt, options: q.options }))),
+      verifySchema, [], 0,
+      { model: lightModel }, // a separate daily quota from the writing model
+    );
+    if (!Array.isArray(check?.answers)) throw new Error("no answers in the verify reply");
+  } catch (err) {
+    console.warn(`verify call failed, keeping ${questions.length} unverified questions:`, err instanceof Error ? err.message : err);
+    return questions;
+  }
   const byIdx = new Map(check.answers.map((a) => [a.idx, a]));
   return questions.filter((q, idx) => {
     const a = byIdx.get(idx);

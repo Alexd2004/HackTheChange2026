@@ -1,5 +1,5 @@
 // LIVE test: question style and the difficulty ramp across a stage's fundamentals levels.
-// Writes the same level as "level 1 of 6" and as "level 6 of 6" and compares the two, then prints the
+// Writes the same level as "level 1 of 2" and as "level 2 of 2" and compares the two, then prints the
 // numbers next to the mock level file (src/mock/level.json) that the app was designed around.
 import { assert } from "jsr:@std/assert@1";
 import { callGemini } from "../_shared/gemini.ts";
@@ -26,7 +26,7 @@ async function writeLevel(n: number): Promise<DraftQuestion[]> {
   const draft = await callGemini<DraftQuestions>(
     writeQuestionsPrompt({
       skill: "SQL", type: "normal", title: "Joining tables", objective: "Combine rows from two tables with joins.",
-      concepts: ["INNER JOIN", "LEFT JOIN", "ON clause"], weakConcepts: [], position: { n, of: 3 }, count: 4,
+      concepts: ["INNER JOIN", "LEFT JOIN", "ON clause"], weakConcepts: [], position: { n, of: 2 }, count: 4,
     }),
     questionsSchema, [], 0.8,
   );
@@ -40,11 +40,11 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const early = await writeLevel(1);
-    const late = await writeLevel(6);
+    const late = await writeLevel(2);
     const e = stats(early), l = stats(late);
 
-    console.log("\n" + line("generated, level 1 of 6", e));
-    console.log(line("generated, level 6 of 6", l));
+    console.log("\n" + line("generated, level 1 of 2", e));
+    console.log(line("generated, level 2 of 2", l));
     try {
       const mock = JSON.parse(await Deno.readTextFile(new URL("../../../src/mock/level.json", import.meta.url)));
       const all: DraftQuestion[] = Object.values(mock).flatMap((v) => (v as { questions: DraftQuestion[] }).questions);
@@ -53,9 +53,9 @@ Deno.test({
       console.log("(mock level.json not found, skipping the comparison line)");
     }
     console.log("\nlevel 1 prompts:\n  " + early.map((q) => `d${q.difficulty} ${q.prompt}`).join("\n  "));
-    console.log("level 6 prompts:\n  " + late.map((q) => `d${q.difficulty} ${q.prompt}`).join("\n  "));
+    console.log("level 2 prompts:\n  " + late.map((q) => `d${q.difficulty} ${q.prompt}`).join("\n  "));
 
-    assert(l.difficulty - e.difficulty >= 0.4, `level 6 (${l.difficulty}) should be clearly harder than level 1 (${e.difficulty})`);
+    assert(l.difficulty - e.difficulty >= 0.4, `level 2 (${l.difficulty}) should be clearly harder than level 1 (${e.difficulty})`);
     assert(e.mcq > 0 && e.blank > 0 && l.mcq > 0 && l.blank > 0, "each level should mix multiple choice and fill-in");
     assert(e.explanationChars <= 150 && l.explanationChars <= 150, "explanations should stay short");
   },

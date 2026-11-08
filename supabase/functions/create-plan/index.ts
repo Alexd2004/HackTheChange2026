@@ -1,6 +1,8 @@
 // create-plan: resume + job posting → skills, gaps, match % and a game map (stages → levels).
-// Input  { resume: { pdfBase64 } | { text }, posting }   Output { plan_id }
+// Input  { resume: { pdfBase64 } | { text }, posting, request_id? }   Output { plan_id }
 // The resume itself is never stored, only the extracted skills.
+// request_id (optional uuid, one per "build my map" tap): a retry with the same id returns the plan that
+// was already made, without calling Gemini again (plans.request_id, migration 007).
 // Speed: only STAGE 1 is designed here, so the map shows sooner. The other stages are saved as
 // 'pending' and designed by the build-stage function while the player starts playing.
 import { handle, json, UserError } from "../_shared/cors.ts";
@@ -10,12 +12,26 @@ import { compareResumeToPosting, norm, pickStageSkills } from "./fit.ts";
 
 const MAX_PDF_BASE64 = 7_000_000; // ~5 MB file
 const MAX_GAP_STAGES = 3; // one stage per missing skill, never more than this
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UNIQUE_VIOLATION = "23505";
+
+/** The plan this user already made for this request id, if any. */
+async function existingPlanId(userId: string, requestId: string): Promise<string | null> {
+  const res = await admin.from("plans").select("id").eq("user_id", userId).eq("request_id", requestId).maybeSingle();
+  if (res.error) throw new Error(`check request_id: ${res.error.message}`);
+  return res.data?.id ?? null;
+}
 
 Deno.serve(handle(async (req) => {
   const userId = await requireUserId(req);
   const body = await req.json().catch(() => null);
   const posting: string = (body?.posting ?? "").trim();
   const resume = body?.resume ?? {};
+  const rawRequestId = body?.request_id;
+  if (rawRequestId != null && rawRequestId !== "" && (typeof rawRequestId !== "string" || !UUID_RE.test(rawRequestId))) {
+    throw new UserError("Invalid request_id.");
+  }
+  const requestId: string | null = rawRequestId ? rawRequestId.toLowerCase() : null;
 
   if (posting.length < 80) throw new UserError("Paste the full job posting (at least a few sentences).");
   if (posting.length > 20000) throw new UserError("That job posting is too long. Paste just the description.");
@@ -24,6 +40,12 @@ Deno.serve(handle(async (req) => {
   if (!pdf && !resumeText) throw new UserError("Add your resume as a PDF or paste it as text.");
   if (pdf && pdf.length > MAX_PDF_BASE64) throw new UserError("That PDF is too big. Try a file under 5 MB.");
   if (resumeText && resumeText.length > 30000) throw new UserError("That resume text is too long.");
+
+  // A retry of a request that already made a plan: return it, no AI calls.
+  if (requestId) {
+    const existing = await existingPlanId(userId, requestId);
+    if (existing) return json({ plan_id: existing });
+  }
 
   // 1-3. Read the posting, rate the resume against it, and work out the gaps (see fit.ts).
   const fit = await compareResumeToPosting({ posting, pdfBase64: pdf, resumeText });
@@ -38,16 +60,20 @@ Deno.serve(handle(async (req) => {
     : null;
 
   // 5. Insert everything.
-  const plan = must(
-    await admin.from("plans").insert({
-      user_id: userId,
-      job_title: (fit.job_title || "Your target role").slice(0, 120),
-      company: fit.company?.slice(0, 120) || null,
-      match_pct: matchPct,
-      start_match_pct: matchPct,
-    }).select("id").single(),
-    "insert plan",
-  );
+  const planRes = await admin.from("plans").insert({
+    user_id: userId,
+    job_title: (fit.job_title || "Your target role").slice(0, 120),
+    company: fit.company?.slice(0, 120) || null,
+    match_pct: matchPct,
+    start_match_pct: matchPct,
+    ...(requestId ? { request_id: requestId } : {}),
+  }).select("id").single();
+  if (planRes.error?.code === UNIQUE_VIOLATION && requestId) {
+    // The same request finished in parallel (e.g. a retry raced the first try): use its plan.
+    const existing = await existingPlanId(userId, requestId);
+    if (existing) return json({ plan_id: existing });
+  }
+  const plan = must(planRes, "insert plan");
 
   try {
     const insertedSkills = must(

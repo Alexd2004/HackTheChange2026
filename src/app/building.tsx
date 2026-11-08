@@ -12,6 +12,7 @@ import { ErrorState, Screen } from "@/components/ui";
 import {
   createPlan,
   prepareFirstLevel,
+  setActivePlan,
   startLevelPrep,
   takePendingPlanInput,
 } from "@/lib/api";
@@ -23,6 +24,7 @@ import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { newRunId } from "@/lib/analytics";
 
 const TILES = 10;
 
@@ -52,6 +54,9 @@ const STEPS = [
 export default function BuildingScreen() {
   const input = useRef<CreatePlanInput | null>(takePendingPlanInput());
   const planId = useRef<string | null>(null); // set once the map exists, so Retry doesn't rebuild it
+  // One id per build attempt (this screen), reused by Retry: if the first request did reach the
+  // server, create-plan returns that plan instead of building a second one.
+  const requestId = useRef<string | null>(null);
   const [step, setStep] = useState(0);
   const [writingFirst, setWritingFirst] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +70,8 @@ export default function BuildingScreen() {
     try {
       if (!planId.current && input.current) {
         setStep(0);
-        const id = await createPlan(input.current);
+        requestId.current ??= newRunId(); // random v4 uuid
+        const id = await createPlan(input.current, requestId.current);
         // Keep the resume on the phone (never on the server) so the resume revamp can use it later.
         // A failed save only means the revamp screen asks for the resume again.
         await saveResume(id, input.current.resume).catch(() => {});
@@ -75,6 +81,7 @@ export default function BuildingScreen() {
       const id = planId.current!;
       setWritingFirst(true);
       await prepareFirstLevel(id); // the map opens with level 1 ready to play
+      setActivePlan(id);
       startLevelPrep(id); // the rest are written one after another while the player plays
       router.replace({ pathname: "/plan/[id]", params: { id } });
     } catch (e) {

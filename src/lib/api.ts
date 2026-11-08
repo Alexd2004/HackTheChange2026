@@ -42,6 +42,13 @@ export function friendly(err: unknown, fallback: string): AppError {
   return new AppError(msg || fallback);
 }
 
+/** A PostgREST/RPC error as an AppError; auth failures (expired/invalid JWT) get status 401. */
+function dbError(err: { code?: string; message?: string }, fallback: string): AppError {
+  const e = friendly(err, fallback);
+  if (isAuthError(err)) e.status = 401;
+  return e;
+}
+
 export async function functionError(error: unknown, fallback: string, fn: string): Promise<AppError> {
   if (error instanceof FunctionsHttpError) {
     const res = error.context as Response;
@@ -88,6 +95,54 @@ export function resetSession(): void {
   sessionPromise = null;
 }
 
+/**
+ * The server rejected who we are: expired / invalid JWT, or the user was deleted (e.g. a database
+ * reset). Function errors carry the 401; PostgREST errors are recognised by code or message.
+ */
+function isAuthError(e: unknown): boolean {
+  if (e instanceof AppError && e.status === 401) return true;
+  const err = e as { code?: unknown; message?: unknown } | null;
+  if (typeof err?.code === "string" && /^PGRST30[123]$/.test(err.code)) return true;
+  const msg = typeof err?.message === "string" ? err.message : "";
+  return /jwt|sub claim|invalid claim|auth session missing|session expired|refresh token/i.test(msg);
+}
+
+let recovering: Promise<boolean> | null = null;
+
+/**
+ * Replaces a dead GUEST session with a fresh guest (local sign-out, forget the cached session, sign
+ * in anonymously). Never touches an email account: swapping that for a guest would hide its plans.
+ * `failedToken` is the token the failed call used: if it already changed, another call recovered.
+ */
+function recoverSession(failedToken: string | undefined): Promise<boolean> {
+  recovering ??= (async () => {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    if (session && session.access_token !== failedToken) return true; // someone else already recovered
+    const user = session?.user;
+    if (user && user.is_anonymous !== true && user.email) return false;
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    resetSession();
+    await ensureSession();
+    return true;
+  })()
+    .catch(() => false)
+    .finally(() => { recovering = null; });
+  return recovering;
+}
+
+/** Runs a server call with a session; on an auth error, recovers the guest session and retries once. */
+async function authed<T>(task: () => Promise<T>): Promise<T> {
+  await ensureSession();
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  try {
+    return await task();
+  } catch (e) {
+    if (!isAuthError(e) || !(await recoverSession(token))) throw e;
+    return task();
+  }
+}
+
 // ------------------------------------------------------------------ pending plan input
 // The upload screen stores the resume here, then the building screen sends it.
 // (A PDF is too big to pass through route params.)
@@ -113,6 +168,17 @@ export const mockProfileStats = () => ({
 
 function mockAllLevels(): Level[] {
   return mock.bundle.stages.flatMap((s) => s.levels);
+}
+
+/**
+ * level.json only has stage 1: other stages replay stage 1's content so mock mode doesn't dead-end.
+ * Same level type (a boss gets stage 1's 6-question boss), same position where possible.
+ */
+function mockFallbackContent(level: Level): LevelContent[string] | undefined {
+  const first = demoBundle.stages[0]?.levels.filter((l) => demoLevels[l.id]) ?? [];
+  const sameType = first.filter((l) => l.type === level.type);
+  const pick = sameType.find((l) => l.idx === level.idx) ?? sameType[0] ?? first.find((l) => l.type === "normal");
+  return pick ? demoLevels[pick.id] : undefined;
 }
 
 function mockComplete(levelId: string, score: number, xp: number): CompleteLevelResultV2 {
@@ -150,29 +216,23 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------------ plans
 
-export async function createPlan(input: CreatePlanInput): Promise<string> {
+/**
+ * `requestId` (a uuid, one per build attempt, reused for that attempt's retries) lets the server
+ * return the plan it already made instead of building a second one when a retry repeats a request.
+ */
+export async function createPlan(input: CreatePlanInput, requestId?: string): Promise<string> {
   if (USE_MOCK) {
     await wait(1500);
     mock.hasPlan = true;
     return mock.bundle.plan.id;
   }
-  await ensureSession();
-  const { data, error } = await supabase.functions.invoke<{ plan_id: string }>("create-plan", { body: input });
-  if (error) throw await functionError(error, "Couldn't build your map.", "create-plan");
-  if (!data?.plan_id) throw new AppError("Couldn't build your map. Please try again.");
-  return data.plan_id;
-}
-
-/** Copies the bundled demo plan into the user's account (backup for the live demo). */
-export async function importDemoPlan(): Promise<string> {
-  if (USE_MOCK) {
-    mock.hasPlan = true;
-    return mock.bundle.plan.id;
-  }
-  await ensureSession();
-  const { data, error } = await supabase.rpc("import_plan", { bundle: demoBundle, level_content: demoLevels });
-  if (error) throw friendly(error, "Couldn't load the demo plan.");
-  return data as string;
+  return authed(async () => {
+    const body = requestId ? { ...input, request_id: requestId } : input;
+    const { data, error } = await supabase.functions.invoke<{ plan_id: string }>("create-plan", { body });
+    if (error) throw await functionError(error, "Couldn't build your map.", "create-plan");
+    if (!data?.plan_id) throw new AppError("Couldn't build your map. Please try again.");
+    return data.plan_id;
+  });
 }
 
 /**
@@ -185,13 +245,15 @@ export async function listPlanSummaries(): Promise<PlanSummary[]> {
     return { plan, stagesTotal: stages.length, stagesBeaten, complete: stages.length > 0 && stagesBeaten === stages.length };
   };
   if (USE_MOCK) return mock.hasPlan ? [summarize(mock.bundle.plan, mock.bundle.stages)] : [];
-  await ensureSession();
-  const { data, error } = await supabase
-    .from("plans")
-    .select("*, stages(levels(type, status))")
-    .order("created_at", { ascending: false })
-    .limit(30);
-  if (error) throw friendly(error, "Couldn't load your plans.");
+  const data = await authed(async () => {
+    const { data, error } = await supabase
+      .from("plans")
+      .select("*, stages(levels(type, status))")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) throw dbError(error, "Couldn't load your plans.");
+    return data;
+  });
   const all = (data as (Plan & { stages: { levels: { type: string; status: string }[] }[] })[]).map(({ stages, ...plan }) =>
     summarize(plan, stages ?? []),
   );
@@ -200,26 +262,39 @@ export async function listPlanSummaries(): Promise<PlanSummary[]> {
 
 export async function listPlans(): Promise<Plan[]> {
   if (USE_MOCK) return mock.hasPlan ? [mock.bundle.plan] : [];
-  await ensureSession();
-  const { data, error } = await supabase.from("plans").select("*").order("created_at", { ascending: false }).limit(5);
-  if (error) throw friendly(error, "Couldn't load your plans.");
-  return data as Plan[];
+  return authed(async () => {
+    const { data, error } = await supabase.from("plans").select("*").order("created_at", { ascending: false }).limit(5);
+    if (error) throw dbError(error, "Couldn't load your plans.");
+    return data as Plan[];
+  });
 }
 
 export async function getPlanBundle(planId: string): Promise<PlanBundle> {
   if (USE_MOCK) return JSON.parse(JSON.stringify(mock.bundle));
-  await ensureSession();
-  const { data, error } = await supabase
-    .from("plans")
-    .select("*, skills(*), stages(*, levels(*))")
-    .eq("id", planId)
-    .single();
-  if (error) throw friendly(error, "Couldn't load your map.");
+  const data = await authed(async () => {
+    const { data, error } = await supabase
+      .from("plans")
+      .select("*, skills(*), stages(*, levels(*))")
+      .eq("id", planId)
+      .single();
+    if (error) throw dbError(error, "Couldn't load your map.");
+    return data;
+  });
   const { skills, stages, ...plan } = data as Plan & { skills: PlanBundle["skills"]; stages: PlanBundle["stages"] };
   const sorted = [...stages]
     .sort((a, b) => a.idx - b.idx)
     .map((s) => ({ ...s, levels: [...s.levels].sort((a, b) => a.idx - b.idx) }));
   return { plan, skills, stages: sorted };
+}
+
+/** Just the plan's Job Match % (the level screen's "before" number). null if it can't be read. */
+export async function getPlanMatchPct(planId: string): Promise<number | null> {
+  if (USE_MOCK) return mock.bundle.plan.match_pct;
+  return authed(async () => {
+    const { data, error } = await supabase.from("plans").select("match_pct").eq("id", planId).single();
+    if (error) throw dbError(error, "Couldn't load your match.");
+    return (data as { match_pct: number }).match_pct;
+  }).catch(() => null);
 }
 
 // ------------------------------------------------------------------ levels
@@ -231,11 +306,10 @@ export function ensureLevelGenerated(levelId: string): Promise<void> {
   if (USE_MOCK) return Promise.resolve();
   const existing = inFlight.get(levelId);
   if (existing) return existing;
-  const p = (async () => {
-    await ensureSession();
+  const p = authed(async () => {
     const { error } = await supabase.functions.invoke("generate-level", { body: { level_id: levelId } });
     if (error) throw await functionError(error, "Couldn't create this level's questions.", "generate-level");
-  })().finally(() => inFlight.delete(levelId));
+  }).finally(() => inFlight.delete(levelId));
   inFlight.set(levelId, p);
   return p;
 }
@@ -297,13 +371,14 @@ async function withRetry<T>(task: () => Promise<T>): Promise<T> {
 export const generateLevelWithRetry = (levelId: string) => withRetry(() => ensureLevelGenerated(levelId));
 
 /** Designs one pending stage (build-stage). Resolves when it's ready (or another request is building it). */
-async function buildStage(stageId: string): Promise<"ready" | "building"> {
-  await ensureSession();
-  const { data, error } = await supabase.functions.invoke<{ ok: boolean; status: "ready" | "building" }>("build-stage", {
-    body: { stage_id: stageId },
+function buildStage(stageId: string): Promise<"ready" | "building"> {
+  return authed(async () => {
+    const { data, error } = await supabase.functions.invoke<{ ok: boolean; status: "ready" | "building" }>("build-stage", {
+      body: { stage_id: stageId },
+    });
+    if (error) throw await functionError(error, "Couldn't build this stage.", "build-stage");
+    return data?.status ?? "ready";
   });
-  if (error) throw await functionError(error, "Couldn't build this stage.", "build-stage");
-  return data?.status ?? "ready";
 }
 
 /** Makes sure the first level on the map has questions. Throws an AppError if it can't. */
@@ -315,13 +390,35 @@ export async function prepareFirstLevel(planId: string): Promise<void> {
   await generateLevelWithRetry(first.id);
 }
 
+// Only the plan whose map is open gets a runner: another plan's runner stops at its next step.
+let activePlanId: string | null = null;
+
+/** Marks the plan the player is on (map open / just built). Other plans' runners stop. */
+export function setActivePlan(planId: string): void {
+  activePlanId = planId;
+}
+const isInactive = (planId: string) => activePlanId !== null && activePlanId !== planId;
+
+/**
+ * The levels the runner writes: every non-boss level of the BUILT stages, plus a boss only once the
+ * level before it is open (so the boss is written after the player has answered this stage's
+ * questions and can target their weak concepts). Otherwise the boss is written by the level
+ * screen's prefetch while the level before it is played, or when it is opened.
+ */
+function runnerTargets(bundle: PlanBundle): Level[] {
+  return bundle.stages
+    .filter((s) => !s.status || s.status === "ready")
+    .flatMap((s) => s.levels.filter((l, i) => l.type !== "boss" || (i > 0 && s.levels[i - 1].status !== "locked")));
+}
+
 /**
  * Starts (or keeps) writing the levels of every BUILT stage in map order, one at a time, in the
- * background. Stages that aren't built yet stay locked and are left alone: they are designed when
- * the previous stage's boss fight starts (prepareNextStage). Never throws.
+ * background (bosses: see runnerTargets). Stages that aren't built yet stay locked and are left
+ * alone: they are designed when the previous stage's boss fight starts (prepareNextStage).
+ * Only runs for the active plan. Never throws.
  */
 export function startLevelPrep(planId: string): void {
-  if (USE_MOCK || prepRunners.has(planId)) return;
+  if (USE_MOCK || prepRunners.has(planId) || isInactive(planId)) return;
   let ready = 0;
   let total = 0;
   const emit = (running: boolean) => emitPrep(planId, { running, ready, total, stagesPending: 0 });
@@ -329,8 +426,9 @@ export function startLevelPrep(planId: string): void {
   const run = (async () => {
     const tried = new Set<string>(); // a level that still fails is written when the player opens it
     for (;;) {
+      if (isInactive(planId)) break; // the player moved to another plan
       const bundle = await getPlanBundle(planId);
-      const built = bundle.stages.filter((s) => !s.status || s.status === "ready").flatMap((s) => s.levels);
+      const built = runnerTargets(bundle);
       total = built.length;
       ready = built.filter((l) => l.generated).length;
       const next = built.find((l) => !l.generated && !tried.has(l.id));
@@ -400,13 +498,14 @@ export async function revampResume(planId: string, resume: StoredResume): Promis
     await wait(1500);
     return JSON.parse(JSON.stringify(mockRevamp)) as RevampedResume;
   }
-  await ensureSession();
-  const { data, error } = await supabase.functions.invoke<RevampedResume>("revamp-resume", {
-    body: { plan_id: planId, resume },
+  return authed(async () => {
+    const { data, error } = await supabase.functions.invoke<RevampedResume>("revamp-resume", {
+      body: { plan_id: planId, resume },
+    });
+    if (error) throw await functionError(error, "Couldn't update your resume.", "revamp-resume");
+    if (!data || !Array.isArray(data.sections)) throw new AppError("Couldn't update your resume. Please try again.");
+    return data;
   });
-  if (error) throw await functionError(error, "Couldn't update your resume.", "revamp-resume");
-  if (!data || !Array.isArray(data.sections)) throw new AppError("Couldn't update your resume. Please try again.");
-  return data;
 }
 
 /** Starts generating the level after this one in the background. Errors are ignored. */
@@ -423,22 +522,25 @@ export async function getLevelBundle(levelId: string): Promise<LevelBundle> {
     const stage = b.stages.find((s) => s.levels.some((l) => l.id === levelId));
     const level = stage?.levels.find((l) => l.id === levelId);
     if (!stage || !level) throw new AppError("Level not found.");
-    const content = demoLevels[levelId];
+    const content = demoLevels[levelId] ?? mockFallbackContent(level);
     if (!content) throw new AppError("Demo data only covers stage 1. Connect Supabase to generate this level with AI.");
     const { levels: _levels, ...stageOnly } = stage;
     return {
       plan_id: b.plan.id, level: { ...level }, stage: stageOnly,
       skill: b.skills.find((s) => s.id === stage.skill_id)!,
-      questions: content.questions, resources: content.resources,
+      questions: content.questions.map((q) => ({ ...q, level_id: levelId })),
+      resources: content.resources.map((r) => ({ ...r, level_id: levelId })),
     };
   }
-  await ensureSession();
-  const { data, error } = await supabase
-    .from("levels")
-    .select("*, stage:stages(*, skill:skills(*)), questions(*), resources(*)")
-    .eq("id", levelId)
-    .single();
-  if (error) throw friendly(error, "Couldn't load this level.");
+  const data = await authed(async () => {
+    const { data, error } = await supabase
+      .from("levels")
+      .select("*, stage:stages(*, skill:skills(*)), questions(*), resources(*)")
+      .eq("id", levelId)
+      .single();
+    if (error) throw dbError(error, "Couldn't load this level.");
+    return data;
+  });
   const { stage, questions, resources, ...level } = data as Level & {
     stage: Stage & { skill: LevelBundle["skill"] }; questions: Question[]; resources: Resource[];
   };
@@ -474,8 +576,9 @@ export function recordAttempt(questionId: string, correct: boolean, details?: At
 
 export async function completeLevel(levelId: string, score: number, xp: number): Promise<CompleteLevelResultV2> {
   if (USE_MOCK) return mockComplete(levelId, score, xp);
-  await ensureSession();
-  const { data, error } = await supabase.rpc("complete_level", { level_id: levelId, score, xp_earned: xp });
-  if (error) throw friendly(error, "Couldn't save your progress.");
-  return data as CompleteLevelResultV2;
+  return authed(async () => {
+    const { data, error } = await supabase.rpc("complete_level", { level_id: levelId, score, xp_earned: xp });
+    if (error) throw dbError(error, "Couldn't save your progress.");
+    return data as CompleteLevelResultV2;
+  });
 }

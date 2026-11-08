@@ -93,8 +93,17 @@ export const playerFeetY = (level: Level, stage: number) => {
 };
 
 export function LevelNode({
-  level, title = level.title, number, isCurrent, hidePlayer, onPress,
-}: { level: Level; title?: string; number: number; isCurrent: boolean; hidePlayer?: boolean; onPress: () => void }) {
+  level, stage, title = level.title, number, isCurrent, hidePlayer, onPress,
+}: {
+  level: Level;
+  /** 1-based stage number: picks that stage's boss coin art. */
+  stage: number;
+  title?: string;
+  number: number;
+  isCurrent: boolean;
+  hidePlayer?: boolean;
+  onPress: () => void;
+}) {
   const { motionOff } = useSettings();
   const scale = useSharedValue(1);
 

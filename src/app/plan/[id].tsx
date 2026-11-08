@@ -25,6 +25,7 @@ import { ErrorState, LoadingState, Screen } from "@/components/ui";
 import {
   catchUpStages,
   getPlanBundle,
+  setActivePlan,
   startLevelPrep,
   subscribePrep,
   type PrepState,
@@ -34,10 +35,10 @@ import { levelTitle } from "@/lib/bosses";
 import { takeFinishedLevel } from "@/lib/progress";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
-import type { PlanBundle, StageWithLevels } from "@/lib/types";
+import type { Level, PlanBundle, StageWithLevels } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -53,7 +54,7 @@ const RUN_MS = 1400;
 const RUN_FADE = 160;
 const RUN_TOTAL = RUN_HOLD + RUN_MS + RUN_FADE / 2;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-const ROW_HEIGHT = 150; // vertical space per level node (node + label)
+const ROW_HEIGHT = 150; // vertical space per level node (node + label), for stages that aren't 3 levels
 const STAGE_PAD = 12;
 const STAGE_BORDER = 4;
 const ARROW = 36; // stage open/collapse arrow button
@@ -117,7 +118,13 @@ const TOWERS: Record<number, Tower> = {
 // clear of the sandy road.
 const CASTLE_BOX = { left: 0.488, top: 0.8283, width: 0.347 };
 // Node index -> road-image fraction of the curve it sits on (measured from the road centreline).
+// Older 4-level stages: levels 2 and 3 on their nearest curves, the rest spaced evenly.
 const CURVE_FRACS: Record<number, number> = { 1: 0.272, 2: 0.587 };
+// Current stages have 3 levels (2 normal, then the boss): one per left-hand curve of the road, the
+// boss on the last one (the castle apex in stage 1). Every 3-level stage is as tall as the old
+// 4-level stage 1 (same road size and castle), which leaves room for the boss label at the bottom.
+const THREE_LEVEL_FRACS = [0.272, 0.587, APEX_FRAC];
+const THREE_LEVEL_HEIGHT = 4 * ROW_HEIGHT + TOWER_ROOM;
 
 /** The castle beside a stage's boss, positioned in the road image's own coordinates. Decorative. */
 function Castle({
@@ -166,13 +173,18 @@ export default function MapScreen() {
   // Level just passed (from the result screen): the monkey runs from it to the current level.
   const [runFrom, setRunFrom] = useState<string | null>(null);
   const onRunDone = useCallback(() => setRunFrom(null), []);
+  const savedCurrent = useRef<string | null>(null); // plan already saved as the profile's current one
 
   const load = useCallback(() => {
     setError(null);
+    setActivePlan(id); // only this plan's background runner keeps going
     getPlanBundle(id)
       .then((b) => {
         setBundle(b);
-        setCurrentPlan(b.plan.id); // remembered on the profile for "Continue"
+        if (savedCurrent.current !== b.plan.id) {
+          savedCurrent.current = b.plan.id;
+          setCurrentPlan(b.plan.id); // remembered on the profile for "Continue" (once per plan)
+        }
         startLevelPrep(b.plan.id); // keep writing built stages' levels (no-op if already running)
         catchUpStages(b); // after an app restart: build a next stage whose boss fight already began
         setRunFrom(takeFinishedLevel());
@@ -404,11 +416,19 @@ function StageSection({
   const beaten = stage.levels.some(
     (l) => l.type === "boss" && l.status === "completed",
   );
-  const locked = stage.levels.every((l) => l.status === "locked");
+  const empty = stage.levels.length === 0;
+  // Still being designed in the background (no levels yet). The open stage shows it as building,
+  // not locked; a later stage is simply locked until its turn.
+  const building = empty && expanded;
+  const locked = !building && stage.levels.every((l) => l.status === "locked");
   const [open, setOpen] = useState(expanded);
   const tower = TOWERS[stageNumber];
-  // Same height and node layout on every stage (stage 1 is the reference).
-  const height = stage.levels.length * ROW_HEIGHT + TOWER_ROOM;
+  // Same height and node layout on every stage (stage 1 is the reference). A 3-level stage keeps the
+  // full road (one node per curve, boss on the last); other lengths use one row per level.
+  const threeLevels = stage.levels.length === 3;
+  const height = threeLevels
+    ? THREE_LEVEL_HEIGHT
+    : stage.levels.length * ROW_HEIGHT + TOWER_ROOM;
   const bossIndex = stage.levels.findIndex((l) => l.type === "boss");
   const roadHeight = ROAD_TUCK + height + ROAD_TAIL + STAGE_PAD; // runs through the bottom padding
   const roadWidth = Math.min(width, roadHeight * ROAD_ASPECT);
@@ -416,14 +436,16 @@ function StageSection({
   // x on the road for y (in the road box) as a fraction of the road image's height.
   const roadX = (y: number) =>
     roadLeft + roadWidth * roadCenter((y + ROAD_TUCK) / roadHeight);
-  // The boss sits on the road's last curve, levels 2 and 3 on their nearest curves,
-  // anything else is spaced evenly.
+  // 3 levels: one per curve, the boss on the last. Other lengths: the boss on the road's last
+  // curve, levels 2 and 3 on their nearest curves, anything else spaced evenly.
   const nodeY = (i: number) =>
-    i === bossIndex
-      ? APEX_FRAC * roadHeight - ROAD_TUCK
-      : i in CURVE_FRACS
-        ? CURVE_FRACS[i] * roadHeight - ROAD_TUCK
-        : (i + 0.5) * ROW_HEIGHT;
+    threeLevels
+      ? THREE_LEVEL_FRACS[i] * roadHeight - ROAD_TUCK
+      : i === bossIndex
+        ? APEX_FRAC * roadHeight - ROAD_TUCK
+        : i in CURVE_FRACS
+          ? CURVE_FRACS[i] * roadHeight - ROAD_TUCK
+          : (i + 0.5) * ROW_HEIGHT;
   const [contentHeight, setContentHeight] = useState(0);
   const bossIcon = bossIcons[stageNumber - 1] ?? bossIcons[0];
 
@@ -432,41 +454,6 @@ function StageSection({
   const fromI = runFrom ? stage.levels.findIndex((l) => l.id === runFrom) : -1;
   const toI = stage.levels.findIndex((l) => l.id === currentId);
   const running = open && !motionOff && fromI !== -1 && toI > fromI;
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!running) return;
-    const start = Date.now();
-    const id = setInterval(() => {
-      const e = Date.now() - start;
-      if (e < RUN_TOTAL) return setElapsed(e);
-      clearInterval(id);
-      setElapsed(0); // ready for the next run
-      onRunDone();
-    }, 16);
-    return () => clearInterval(id);
-  }, [running, onRunDone]);
-  const p = clamp01((elapsed - RUN_HOLD) / RUN_MS);
-  // 1 = idle sprite showing, 0 = running sprite; crossfades centred on leaving and arriving.
-  const idleness = running
-    ? Math.max(
-        1 - clamp01((elapsed - RUN_HOLD + RUN_FADE / 2) / RUN_FADE),
-        clamp01((elapsed - RUN_HOLD - RUN_MS + RUN_FADE / 2) / RUN_FADE),
-      )
-    : 1;
-  // The overlay stays mounted (invisible when not running) so both sheets are loaded before a run.
-  const restI = toI !== -1 ? toI : 0;
-  const ovFrom = running ? fromI : restI;
-  const ovTo = running ? toI : restI;
-  const runY = nodeY(ovFrom) + (nodeY(ovTo) - nodeY(ovFrom)) * p;
-  // A stage still being built in the background has no levels yet: no player to place.
-  const fromLevel = stage.levels[ovFrom];
-  const toLevel = stage.levels[ovTo];
-  const feetY =
-    fromLevel && toLevel
-      ? runY +
-        playerFeetY(fromLevel) +
-        (playerFeetY(toLevel) - playerFeetY(fromLevel)) * p
-      : 0;
 
   return (
     <View
@@ -509,7 +496,7 @@ function StageSection({
           }}
           accessible
           accessibilityRole="header"
-          accessibilityLabel={`Stage ${stageNumber}: ${stage.title}. Skill: ${skillName}. ${locked ? "Locked" : `${done} of ${stage.levels.length} levels done${beaten ? ", stage beaten" : ""}`}.`}
+          accessibilityLabel={`Stage ${stageNumber}: ${stage.title}. Skill: ${skillName}. ${building ? "Being built" : locked ? "Locked" : `${done} of ${stage.levels.length} levels done${beaten ? ", stage beaten" : ""}`}.`}
         >
           <Image
             source={monkey}
@@ -533,9 +520,11 @@ function StageSection({
             Stage {stageNumber} · {skillName} ·{" "}
             {beaten
               ? "Beaten"
-              : locked
-                ? "Locked"
-                : `${done}/${stage.levels.length}`}
+              : building
+                ? "Building…"
+                : locked
+                  ? "Locked"
+                  : `${done}/${stage.levels.length}`}
           </Text>
           <Text className="text-center" style={font(26)} numberOfLines={2}>
             {stage.title}
@@ -547,8 +536,18 @@ function StageSection({
           ) : null}
         </View>
 
+        {open && building && (
+          <Text
+            className="mt-3 text-center"
+            style={outlined(22)}
+            accessibilityLiveRegion="polite"
+          >
+            Your next stage is being built…
+          </Text>
+        )}
+
         {/* Road + nodes: the road runs under the banner at the top and under the bottom border at the end. */}
-        {open && (
+        {open && !empty && (
           <View style={{ width, height: height + ROAD_TAIL }}>
             <Image
               source={road}
@@ -582,6 +581,7 @@ function StageSection({
                 >
                   <LevelNode
                     level={level}
+                    stage={stageNumber}
                     title={levelTitle(level, stageNumber - 1)}
                     number={levelOffset + i + 1}
                     isCurrent={level.id === currentId}
@@ -596,44 +596,16 @@ function StageSection({
                 </View>
               );
             })}
-            {stage.levels.length > 0 && (
-              <View
-                style={{
-                  position: "absolute",
-                  left: roadX(runY),
-                  top: feetY,
-                  opacity: running ? 1 : 0,
-                }}
-                pointerEvents="none"
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-              >
-                <View
-                  style={{
-                    position: "absolute",
-                    left: -MONKEY_WIDTH / 2,
-                    top: -MONKEY_HEIGHT,
-                    opacity: idleness,
-                  }}
-                >
-                  <IdleMonkey />
-                </View>
-                <View
-                  style={{
-                    position: "absolute",
-                    left: -RUN_WIDTH / 2,
-                    top: -RUN_HEIGHT,
-                    opacity: 1 - idleness,
-                  }}
-                >
-                  {/* Face the way the road is heading. */}
-                  <RunningMonkey
-                    flip={roadX(runY + 1) < roadX(runY)}
-                    animate={running}
-                  />
-                </View>
-              </View>
-            )}
+            <RunOverlay
+              levels={stage.levels}
+              stageNumber={stageNumber}
+              fromI={fromI}
+              toI={toI}
+              running={running}
+              nodeY={nodeY}
+              roadX={roadX}
+              onRunDone={onRunDone}
+            />
           </View>
         )}
       </View>
@@ -680,6 +652,107 @@ function StageSection({
           color={c.cream}
         />
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The monkey's run from the level just passed to the current one. Its own component so only it
+ * re-renders on each animation frame, not the whole stage. It stays mounted (invisible when not
+ * running) so both sprite sheets are loaded before a run.
+ */
+function RunOverlay({
+  levels,
+  stageNumber,
+  fromI,
+  toI,
+  running,
+  nodeY,
+  roadX,
+  onRunDone,
+}: {
+  levels: Level[];
+  stageNumber: number; // 1-based: the boss coin art (and so the player's feet height) differs per stage
+  fromI: number;
+  toI: number;
+  running: boolean;
+  nodeY: (i: number) => number;
+  roadX: (y: number) => number;
+  onRunDone: () => void;
+}) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const start = Date.now();
+    let frame = requestAnimationFrame(function tick() {
+      const e = Date.now() - start;
+      if (e < RUN_TOTAL) {
+        setElapsed(e);
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+      setElapsed(0); // ready for the next run
+      onRunDone();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [running, onRunDone]);
+
+  // A stage still being built in the background has no levels yet: no player to place.
+  if (levels.length === 0) return null;
+  const p = clamp01((elapsed - RUN_HOLD) / RUN_MS);
+  // 1 = idle sprite showing, 0 = running sprite; crossfades centred on leaving and arriving.
+  const idleness = running
+    ? Math.max(
+        1 - clamp01((elapsed - RUN_HOLD + RUN_FADE / 2) / RUN_FADE),
+        clamp01((elapsed - RUN_HOLD - RUN_MS + RUN_FADE / 2) / RUN_FADE),
+      )
+    : 1;
+  const restI = toI !== -1 ? toI : 0;
+  const ovFrom = running ? fromI : restI;
+  const ovTo = running ? toI : restI;
+  const runY = nodeY(ovFrom) + (nodeY(ovTo) - nodeY(ovFrom)) * p;
+  const fromLevel = levels[ovFrom];
+  const toLevel = levels[ovTo];
+  const feetY =
+    fromLevel && toLevel
+      ? runY +
+        playerFeetY(fromLevel, stageNumber) +
+        (playerFeetY(toLevel, stageNumber) - playerFeetY(fromLevel, stageNumber)) * p
+      : 0;
+
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: roadX(runY),
+        top: feetY,
+        opacity: running ? 1 : 0,
+      }}
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View
+        style={{
+          position: "absolute",
+          left: -MONKEY_WIDTH / 2,
+          top: -MONKEY_HEIGHT,
+          opacity: idleness,
+        }}
+      >
+        <IdleMonkey />
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          left: -RUN_WIDTH / 2,
+          top: -RUN_HEIGHT,
+          opacity: 1 - idleness,
+        }}
+      >
+        {/* Face the way the road is heading. */}
+        <RunningMonkey flip={roadX(runY + 1) < roadX(runY)} animate={running} />
+      </View>
     </View>
   );
 }

@@ -25,7 +25,8 @@ The first run downloads dependencies, so it is slower.
 |---|---|
 | `shuffle_test.ts` | The correct answer lands in A/B/C/D about 25% each; the answer text follows its index; "All of the above" style options stay in place |
 | `stage_skills_test.ts` | Which skills become stages: biggest gaps first, never more than 3, review stages when there are no gaps |
-| `resources_test.ts` | The AI link picker: picks are taken by number, invented or repeated numbers are ignored, max 3, falls back to the top results if the AI fails, searches again with a simpler query when there are fewer than 3 results, no resources when the search is empty |
+| `resources_test.ts` | The code link ranker (no AI call): trusted learning/doc sites first, one link per site, max 3, off-topic/social/shopping/sign-up pages dropped, searches again with a simpler query when there are fewer than 3 results, no resources when the search is empty |
+| `questions_test.ts` | `makeQuestions` with faked Google replies: 2 spare questions in round 1, boss writes 6 over the two earlier levels, verify goes to `GEMINI_MODEL_LIGHT`, a failed verify CALL keeps the well-formed questions, a disagreeing verify drops them, a failed second round keeps round 1 when there are enough |
 | `revamp_test.ts` | Resume revamp rules: which skills may be added, blocked skills removed from skills, summary, bullets and headline, earned skills always added, the AI's reply never written to logs |
 | `resume_store_test.ts` | The on-phone resume store (`src/lib/resumeStore.ts`) with the phone's files faked: text and PDF round trip, only a tiny pointer in AsyncStorage, null when the file is gone, one resume per plan, ids can't escape the folder |
 | `resume_html_test.ts` | The page printed to the revamped-resume PDF (`src/lib/resumeHtml.ts`): all content present, name and contact laid out, HTML in resume text is escaped, nothing loaded from the internet, empty fields leave no gaps |
@@ -33,18 +34,18 @@ The first run downloads dependencies, so it is slower.
 
 ## Live tests (`deno task live`)
 
-They read keys from `supabase/functions/.env` (`GEMINI_API_KEY`, `GEMINI_MODEL`, `KEENABLE_API_KEY`).
+They read keys from `supabase/functions/.env` (`GEMINI_API_KEY`, `GEMINI_MODEL`, optional `GEMINI_MODEL_LIGHT` for the answer check, `KEENABLE_API_KEY`).
 A test is skipped if its key is missing.
 
 | File | Checks |
 |---|---|
 | `keenable_live_test.ts` | A real search returns parsed resources |
 | `fit_live_test.ts` | Sample resumes vs sample postings: PostgreSQL counts as SQL, a career changer has gaps, "Power BI or Tableau" is one skill, a strong resume has almost no gaps |
-| `map_live_test.ts` | The map has 3 stages of 4 levels (3 normal + boss), and the boss questions cover the earlier levels |
+| `map_live_test.ts` | The map has 3 stages of 3 levels (2 normal + boss), and the boss's 6 questions cover both earlier levels |
 | `shuffle_live_test.ts` | Shuffled multiple-choice questions still pass the verification call |
-| `resources_live_test.ts` | A real search then the real AI picker returns 1 to 3 different links, all from the search results; a nonsense level doesn't crash or invent links |
+| `resources_live_test.ts` | A real search then the code ranker returns 1 to 3 different links, all from the search results; a nonsense level doesn't crash or invent links |
 | `revamp_live_test.ts` | Real Gemini revamp of a pasted resume and of a PDF: earned skill added, blocked skills absent, contact/employers/dates copied exactly, no invented numbers |
-| `question_quality_live_test.ts` | Level 6 of 6 is harder than level 1 of 6, questions stay short, and the numbers are printed next to the mock level file |
+| `question_quality_live_test.ts` | Level 2 of 2 is harder than level 1 of 2, questions stay short, and the numbers are printed next to the mock level file |
 
 The samples in `samples/` are made-up people and postings, not real data.
 
@@ -63,6 +64,6 @@ The samples in `samples/` are made-up people and postings, not real data.
 
 Runs the real create-plan and generate-level pipelines (no database) for three made-up resume and posting pairs and
 prints timings against the targets (create-plan under 20 s, a level under 15 s). It flags vague concepts, more than 3
-stages, levels that are not 7 per stage, concept names not on the level's list, long explanations, a flat difficulty
+stages, levels that are not 3 per stage, concept names not on the level's list, long explanations, a flat difficulty
 ramp, missing resources, and a boss that skips earlier levels. It paces itself under the 15 requests/minute free limit,
 so the pauses it prints are normal. Occasional slow levels (20 s or more) are Google latency spikes, not a code problem.

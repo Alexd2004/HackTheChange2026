@@ -199,103 +199,6 @@
       }
     ]
   },
-  "00000000-0000-4000-8000-000000000103": {
-    "questions": [
-      {
-        "id": "00000000-0000-4000-8000-000000005009",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "idx": 0,
-        "kind": "mcq",
-        "prompt": "Which query counts orders per customer?",
-        "options": [
-          "SELECT COUNT(customer_id) FROM orders;",
-          "SELECT customer_id FROM orders ORDER BY COUNT;",
-          "SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id;",
-          "SELECT * FROM orders GROUP customer_id;"
-        ],
-        "correct_index": 2,
-        "answers": null,
-        "explanation": "GROUP BY makes one group per customer, and COUNT(*) counts the rows in each group.",
-        "concept": "GROUP BY",
-        "difficulty": 2,
-        "hint": "You need one row per customer, with a number in each."
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000005010",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "idx": 1,
-        "kind": "blank",
-        "prompt": "Keep only groups with more than 5 orders: … GROUP BY customer_id ____ COUNT(*) > 5;",
-        "options": null,
-        "correct_index": null,
-        "answers": [
-          "HAVING"
-        ],
-        "explanation": "HAVING filters groups after aggregation; WHERE filters rows before it.",
-        "concept": "HAVING",
-        "difficulty": 2,
-        "hint": "WHERE can't filter on a count: which clause filters after grouping?"
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000005011",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "idx": 2,
-        "kind": "mcq",
-        "prompt": "Why does `WHERE COUNT(*) > 5` fail?",
-        "options": [
-          "WHERE runs before rows are grouped",
-          "COUNT needs a column name",
-          "5 must be quoted",
-          "WHERE only works with text"
-        ],
-        "correct_index": 0,
-        "answers": null,
-        "explanation": "Aggregates don't exist yet when WHERE runs, so use HAVING.",
-        "concept": "HAVING",
-        "difficulty": 3,
-        "hint": "Think about the order SQL runs its steps in."
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000005012",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "idx": 3,
-        "kind": "blank",
-        "prompt": "The function that adds up a numeric column is ____( ).",
-        "options": null,
-        "correct_index": null,
-        "answers": [
-          "SUM"
-        ],
-        "explanation": "SUM adds values; COUNT counts rows; AVG averages.",
-        "concept": "COUNT",
-        "difficulty": 2,
-        "hint": "It's the aggregate that totals numbers, not the one that counts rows."
-      }
-    ],
-    "resources": [
-      {
-        "id": "00000000-0000-4000-8000-000000006007",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "title": "SQLBolt: Queries with aggregates",
-        "url": "https://sqlbolt.com/lesson/select_queries_with_aggregates",
-        "snippet": "GROUP BY and aggregate functions."
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000006008",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "title": "W3Schools: SQL HAVING",
-        "url": "https://www.w3schools.com/sql/sql_having.asp",
-        "snippet": "Filter groups after aggregation."
-      },
-      {
-        "id": "00000000-0000-4000-8000-000000006009",
-        "level_id": "00000000-0000-4000-8000-000000000103",
-        "title": "PostgreSQL tutorial: Aggregate functions",
-        "url": "https://www.postgresql.org/docs/current/tutorial-agg.html",
-        "snippet": "Official intro to COUNT, SUM, GROUP BY and HAVING."
-      }
-    ]
-  },
   "00000000-0000-4000-8000-000000000104": {
     "questions": [
       {
@@ -370,6 +273,41 @@
         "concept": "JOIN",
         "difficulty": 3,
         "hint": "Which kind of combining keeps every customer, even with zero matching orders?"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000005017",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 4,
+        "kind": "mcq",
+        "prompt": "The manager now wants the number of orders for each city. Which query gives one row per city?",
+        "options": [
+          "SELECT city, COUNT(*) FROM customers JOIN orders ON orders.customer_id = customers.id;",
+          "SELECT COUNT(city) FROM customers ORDER BY city;",
+          "SELECT city, COUNT(*) FROM customers JOIN orders ON orders.customer_id = customers.id GROUP BY city;",
+          "SELECT DISTINCT city FROM customers WHERE COUNT(*) > 0;"
+        ],
+        "correct_index": 2,
+        "answers": null,
+        "explanation": "GROUP BY city makes one group per city, and COUNT(*) counts the joined order rows in each.",
+        "concept": "GROUP BY",
+        "difficulty": 2,
+        "hint": "A count per something needs the rows split into one bucket for each value."
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000005018",
+        "level_id": "00000000-0000-4000-8000-000000000104",
+        "idx": 5,
+        "kind": "blank",
+        "prompt": "To list the busiest cities first, finish the query: … GROUP BY city ____ BY COUNT(*) DESC;",
+        "options": null,
+        "correct_index": null,
+        "answers": [
+          "ORDER"
+        ],
+        "explanation": "ORDER BY sorts the result; DESC puts the biggest counts at the top.",
+        "concept": "ORDER BY",
+        "difficulty": 2,
+        "hint": "This clause runs last and decides the order the rows come out in."
       }
     ],
     "resources": []
