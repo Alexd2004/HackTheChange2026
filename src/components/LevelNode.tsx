@@ -1,16 +1,31 @@
-// A round level button on the map: lock icon when locked, star when completed,
-// number / bolt / skull for normal / challenge / boss. The current level gently pulses.
+// A level button on the map, drawn from the node sprite sheets: blue = playable, gold = completed,
+// gray = locked. Bosses use the boss coin. The current level gently pulses.
 import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
 } from "react-native-reanimated";
 import { useSettings } from "@/lib/settings";
-import { colors, levelColor, levelTypeLabel } from "@/lib/theme";
-import type { Level } from "@/lib/types";
-import { Icon } from "./pixel";
+import { levelTypeLabel, pixelColors as c } from "@/lib/theme";
+import type { Level, LevelStatus } from "@/lib/types";
+import { Sprite, font, type Frame, type Sheet } from "./pixel";
 
 export const NODE_SIZE = 72;
+
+const nodes: Sheet = { src: require("../../assets/maps sprites/level nodes.png"), w: 1536, h: 1024 };
+const nodeFrames: Record<LevelStatus, Frame> = {
+  unlocked: { x: 856, y: 150, w: 302, h: 284 },
+  completed: { x: 371, y: 554, w: 302, h: 284 },
+  locked: { x: 856, y: 554, w: 302, h: 284 },
+};
+
+// shortcut: every stage's boss uses the stage-1 coin; switch to "level2 boss node.png" per stage once its layout is mapped.
+const boss: Sheet = { src: require("../../assets/maps sprites/level1 boss node.png"), w: 1536, h: 1024 };
+const bossFrames: Record<LevelStatus, Frame> = {
+  locked: { x: 90, y: 289, w: 400, h: 446 },
+  unlocked: { x: 569, y: 289, w: 400, h: 446 },
+  completed: { x: 1045, y: 289, w: 400, h: 446 },
+};
 
 export function LevelNode({
   level, number, isCurrent, onPress,
@@ -30,12 +45,8 @@ export function LevelNode({
   const pulse = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const locked = level.status === "locked";
-  const done = level.status === "completed";
-  const accent = levelColor(level.type);
-  const size = level.type === "boss" ? NODE_SIZE + 12 : NODE_SIZE;
-
-  const icon = locked ? "lock" : done ? "star" : level.type === "boss" ? "skull" : level.type === "challenge" ? "lightning-bolt" : null;
-  const stateText = locked ? "locked" : done ? `completed, best score ${level.best_score ?? 0}%` : "ready to play";
+  const isBoss = level.type === "boss";
+  const stateText = locked ? "locked" : level.status === "completed" ? `completed, best score ${level.best_score ?? 0}%` : "ready to play";
 
   return (
     <View className="items-center" style={{ width: 140 }}>
@@ -46,31 +57,18 @@ export function LevelNode({
         accessibilityLabel={`${levelTypeLabel[level.type]} ${number}: ${level.title}, ${stateText}`}
         accessibilityState={{ disabled: locked }}
         hitSlop={8}>
-        <Animated.View
-          style={[
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: locked ? colors.raised : done ? accent : colors.panel,
-              borderWidth: 4,
-              borderColor: locked ? colors.line : accent,
-              borderBottomWidth: 8, // chunky "button" depth
-            },
-            pulse,
-          ]}>
-          {icon ? (
-            <Icon name={icon} size={locked ? 26 : 32} color={done ? colors.ink : locked ? colors.muted : accent} />
-          ) : (
-            <Text style={{ fontSize: 26, fontWeight: "800", color: accent }}>{number}</Text>
-          )}
+        <Animated.View style={pulse}>
+          <Sprite
+            sheet={isBoss ? boss : nodes}
+            frame={(isBoss ? bossFrames : nodeFrames)[level.status]}
+            width={isBoss ? NODE_SIZE + 12 : NODE_SIZE}
+          />
         </Animated.View>
       </Pressable>
       <Text
         numberOfLines={2}
-        className={`mt-2 overflow-hidden rounded-lg bg-ink px-2 py-0.5 text-center text-sm font-semibold ${locked ? "text-muted" : "text-fg"}`}>
+        className="mt-1 px-2 text-center"
+        style={{ ...font(18, locked ? c.stoneDark : c.wood), backgroundColor: c.parchment, borderWidth: 2, borderColor: c.wood }}>
         {level.title}
       </Text>
     </View>

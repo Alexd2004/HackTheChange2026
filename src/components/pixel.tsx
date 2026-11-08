@@ -1,7 +1,7 @@
 // Shared pixel-art pieces (landing, upload, building, level): background, text style, panels, buttons, tile bar.
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
-import { Pressable, Text, View, type TextStyle, type ViewStyle } from "react-native";
+import { Image, Pressable, Text, View, type ImageSourcePropType, type TextStyle, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { pixelColors as c, pixelFont } from "@/lib/theme";
 
@@ -125,6 +125,27 @@ export function PixelButton({
         </View>
       )}
     </Pressable>
+  );
+}
+
+export interface Sheet {
+  src: ImageSourcePropType;
+  w: number;
+  h: number;
+}
+/** Frame rectangle on a sheet, in sheet pixels. */
+export type Frame = { x: number; y: number; w: number; h: number };
+
+/** One frame of a sprite sheet, scaled to `width`. Decorative: the parent carries the accessibility label. */
+export function Sprite({ sheet, frame, width }: { sheet: Sheet; frame: Frame; width: number }) {
+  const s = width / frame.w;
+  return (
+    <View style={{ width, height: frame.h * s, overflow: "hidden" }} pointerEvents="none">
+      <Image
+        source={sheet.src}
+        style={{ position: "absolute", left: -frame.x * s, top: -frame.y * s, width: sheet.w * s, height: sheet.h * s }}
+      />
+    </View>
   );
 }
 

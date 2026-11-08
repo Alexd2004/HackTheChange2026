@@ -21,6 +21,7 @@ export const pixelFont = "Jersey25_400Regular";
 export const pixelColors = {
   grass: "#5DA03A",
   grassDark: "#3F7A27",
+  meadow: "#5A9B12", // sampled from maps sprites/main background.png
   dirt: "#D9965B",
   dirtEdge: "#A8673A",
   gold: "#FFD34D",
