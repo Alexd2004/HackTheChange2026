@@ -149,7 +149,7 @@ export default function UploadScreen() {
     setDemoLoading(true);
     try {
       const id = await importDemoPlan();
-      router.push({ pathname: "/plan/[id]", params: { id } });
+      router.push({ pathname: "/plan/[id]", params: { id } }); // the map writes stages 2-3 in the background
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load the demo plan.");
     } finally {
@@ -373,7 +373,7 @@ export default function UploadScreen() {
               )}
               {!typing && (
                 <Text style={font(16, c.stoneDark)}>
-                  Your resume is analyzed once and never stored.
+                  Your resume stays on your phone. It’s sent to Google’s Gemini AI to read it, and we only save your skills.
                 </Text>
               )}
             </View>

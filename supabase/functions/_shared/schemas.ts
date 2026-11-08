@@ -71,8 +71,8 @@ export const mapSchema = {
           summary: str,
           levels: {
             type: "array",
-            minItems: 7,
-            maxItems: 7,
+            minItems: 4,
+            maxItems: 4,
             items: {
               type: "object",
               properties: {
@@ -119,6 +119,7 @@ export interface DraftQuestion {
   correct_index: number | null;
   answers: string[] | null;
   explanation: string;
+  hint: string; // a nudge that never reveals the answer (code double-checks it)
   concept: string;
   difficulty: number;
 }
@@ -139,10 +140,11 @@ export const questionsSchema = {
           correct_index: { type: ["integer", "null"] },
           answers: { type: ["array", "null"], items: str },
           explanation: str,
+          hint: str,
           concept: str,
           difficulty: int(1, 3),
         },
-        required: ["kind", "prompt", "options", "correct_index", "answers", "explanation", "concept", "difficulty"],
+        required: ["kind", "prompt", "options", "correct_index", "answers", "explanation", "hint", "concept", "difficulty"],
       },
     },
   },

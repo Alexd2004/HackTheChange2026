@@ -23,7 +23,9 @@ export interface Skill {
   required: boolean;
   have_level: number; // 0-3, from the resume
   need_level: number; // 1-3, from the posting
-  is_gap: boolean; // have_level < need_level
+  is_gap: boolean; // have_level < need_level (the ORIGINAL gap from the resume; never changes)
+  /** Set when the player beats this skill's stage boss (migration 006). Earned skills leave "To learn". */
+  earned_at?: string | null;
 }
 
 export interface Stage {
@@ -33,6 +35,8 @@ export interface Stage {
   idx: number;
   title: string;
   summary: string;
+  /** "pending"/"building" = still being designed in the background (migration 005). Missing = ready. */
+  status?: "ready" | "pending" | "building";
 }
 
 export interface Level {
@@ -60,6 +64,8 @@ export interface Question {
   explanation: string;
   concept: string;
   difficulty: number; // 1-3
+  /** AI-written nudge shown before answering; never contains the answer (checked in generate-level). */
+  hint?: string | null;
 }
 
 export interface Resource {

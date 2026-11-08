@@ -5,8 +5,10 @@ import mockLevels from "../mock/level.json";
 import mockPlan from "../mock/plan.json";
 import { supabase, supabaseConfigured } from "./supabase";
 import type {
-  AttemptDetails, CompleteLevelResultV2, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage,
+  AttemptDetails, CompleteLevelResultV2, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage, RevampedResume,
 } from "./types";
+import type { StoredResume } from "./resumeStore";
+import mockRevamp from "../mock/revamp.json";
 
 export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === "1";
 
@@ -17,7 +19,20 @@ const demoLevels = mockLevels as LevelContent;
 // ------------------------------------------------------------------ errors
 
 /** An error whose message is safe to show to the user. */
-export class AppError extends Error {}
+export class AppError extends Error {
+  /** HTTP status from a server function, when there was one (used to decide whether to retry). */
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** Worth retrying: no response (network), rate limited (429), or a server/AI error (5xx). */
+export const isRetryable = (e: unknown) => {
+  const status = e instanceof AppError ? e.status : undefined;
+  return status === undefined || status === 429 || status >= 500;
+};
 
 /** Turns any error into one with a message safe to show. Shared with auth.ts / analytics.ts. */
 export function friendly(err: unknown, fallback: string): AppError {
@@ -32,16 +47,16 @@ export async function functionError(error: unknown, fallback: string, fn: string
     const res = error.context as Response;
     try {
       const body = await res.clone().json();
-      if (body?.error) return new AppError(body.error); // our own readable message
+      if (body?.error) return new AppError(body.error, res.status); // our own readable message
       if (body?.code === "NOT_FOUND") {
-        return new AppError(`The "${fn}" server function isn't deployed yet. Run: supabase functions deploy ${fn}`);
+        return new AppError(`The "${fn}" server function isn't deployed yet. Run: supabase functions deploy ${fn}`, 404);
       }
     } catch {
       // not JSON, fall through
     }
-    if (res.status === 401) return new AppError("Your session expired. Close and reopen the app.");
-    if (res.status === 546 || res.status === 504) return new AppError("The server took too long. Please try again.");
-    return new AppError(`${fallback} (server error ${res.status})`);
+    if (res.status === 401) return new AppError("Your session expired. Close and reopen the app.", 401);
+    if (res.status === 546 || res.status === 504) return new AppError("The server took too long. Please try again.", 504);
+    return new AppError(`${fallback} (server error ${res.status})`, res.status);
   }
   return friendly(error, fallback);
 }
@@ -119,6 +134,11 @@ function mockComplete(levelId: string, score: number, xp: number): CompleteLevel
     .reduce((a, s) => a + s.weight, 0);
   plan.match_pct = Math.round((100 * have) / total);
   plan.xp += award;
+  if (lv.type === "boss") {
+    const stage = stages.find((st) => st.levels.some((l) => l.id === levelId));
+    const skill = skills.find((sk) => sk.id === stage?.skill_id);
+    if (skill && !skill.earned_at) skill.earned_at = new Date().toISOString();
+  }
   mock.streak = Math.max(mock.streak, 1);
   return {
     match_pct: plan.match_pct, xp: plan.xp, next_level_id: next?.id ?? null,
@@ -197,9 +217,178 @@ export function ensureLevelGenerated(levelId: string): Promise<void> {
   return p;
 }
 
+// ------------------------------------------------------------------ level preparation
+// The map opens as soon as stage 1 and its FIRST level are ready. Then two things run at the same
+// time, in the background: the other stages are designed (build-stage), and the levels are written
+// one after another in map order (generate-level), picking up each new stage's levels as it appears.
+// One runner per plan; it survives screen changes, and the map restarts it after an app reload.
+
+export interface PrepState {
+  running: boolean;
+  ready: number; // levels with questions
+  total: number; // levels on the map so far
+  stagesPending: number; // stages still being designed
+}
+
+const prepRunners = new Map<string, Promise<void>>();
+const prepStates = new Map<string, PrepState>();
+const prepListeners = new Map<string, Set<(s: PrepState) => void>>();
+
+function emitPrep(planId: string, state: PrepState) {
+  prepStates.set(planId, state);
+  prepListeners.get(planId)?.forEach((fn) => fn(state));
+}
+
+/** True while the background runner is preparing this plan (the level screen then skips its own prefetch). */
+export const isPreparing = (planId: string) => prepRunners.has(planId);
+
+/** Calls `fn` with the plan's preparation progress (now, if known, and on every change). */
+export function subscribePrep(planId: string, fn: (s: PrepState) => void): () => void {
+  if (!prepListeners.has(planId)) prepListeners.set(planId, new Set());
+  const set = prepListeners.get(planId)!;
+  set.add(fn);
+  const now = prepStates.get(planId);
+  if (now) fn(now);
+  return () => {
+    set.delete(fn);
+    if (set.size === 0) prepListeners.delete(planId);
+  };
+}
+
+/**
+ * Runs `task`, retrying twice (5 s, then 20 s) when the AI is busy, rate-limited or the network
+ * dropped. Errors that won't fix themselves (not found, signed out, bad input) fail at once.
+ */
+async function withRetry<T>(task: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await task();
+    } catch (e) {
+      if (attempt >= 3 || !isRetryable(e)) throw e;
+      await wait(attempt === 1 ? 5_000 : 20_000); // Gemini free tier: ~15 calls a minute
+    }
+  }
+}
+
+/** Generates a level's questions with retries (used by the level screen and the background runner). */
+export const generateLevelWithRetry = (levelId: string) => withRetry(() => ensureLevelGenerated(levelId));
+
+/** Designs one pending stage (build-stage). Resolves when it's ready (or another request is building it). */
+async function buildStage(stageId: string): Promise<"ready" | "building"> {
+  await ensureSession();
+  const { data, error } = await supabase.functions.invoke<{ ok: boolean; status: "ready" | "building" }>("build-stage", {
+    body: { stage_id: stageId },
+  });
+  if (error) throw await functionError(error, "Couldn't build this stage.", "build-stage");
+  return data?.status ?? "ready";
+}
+
+/** Makes sure the first level on the map has questions. Throws an AppError if it can't. */
+export async function prepareFirstLevel(planId: string): Promise<void> {
+  if (USE_MOCK) return;
+  const bundle = await getPlanBundle(planId);
+  const first = bundle.stages.flatMap((s) => s.levels)[0];
+  if (!first || first.generated) return;
+  await generateLevelWithRetry(first.id);
+}
+
+/**
+ * Starts (or keeps) writing the levels of every BUILT stage in map order, one at a time, in the
+ * background. Stages that aren't built yet stay locked and are left alone: they are designed when
+ * the previous stage's boss fight starts (prepareNextStage). Never throws.
+ */
+export function startLevelPrep(planId: string): void {
+  if (USE_MOCK || prepRunners.has(planId)) return;
+  let ready = 0;
+  let total = 0;
+  const emit = (running: boolean) => emitPrep(planId, { running, ready, total, stagesPending: 0 });
+
+  const run = (async () => {
+    const tried = new Set<string>(); // a level that still fails is written when the player opens it
+    for (;;) {
+      const bundle = await getPlanBundle(planId);
+      const built = bundle.stages.filter((s) => !s.status || s.status === "ready").flatMap((s) => s.levels);
+      total = built.length;
+      ready = built.filter((l) => l.generated).length;
+      const next = built.find((l) => !l.generated && !tried.has(l.id));
+      if (!next) break;
+      emit(true);
+      tried.add(next.id);
+      try {
+        await generateLevelWithRetry(next.id);
+      } catch (e) {
+        if (!isRetryable(e)) break; // signed out / plan gone: stop instead of hammering the server
+      }
+    }
+    emit(false);
+  })()
+    .catch(() => emit(false))
+    .finally(() => prepRunners.delete(planId));
+  prepRunners.set(planId, run);
+}
+
+const stageBuilds = new Map<string, Promise<void>>();
+
+/**
+ * Called when a boss fight starts: designs the NEXT stage (build-stage) in the background, then
+ * writes its levels. It stays locked on the map until this boss is beaten. Never throws.
+ */
+export function prepareNextStage(planId: string, bossStageIdx: number): void {
+  if (USE_MOCK) return;
+  const key = `${planId}:${bossStageIdx + 1}`;
+  if (stageBuilds.has(key)) return;
+  const run = (async () => {
+    const bundle = await getPlanBundle(planId);
+    const next = bundle.stages.find((s) => s.idx === bossStageIdx + 1);
+    if (next && next.status && next.status !== "ready") {
+      // "building" means another request has it: ask again every 10 s (up to ~2 minutes).
+      for (let i = 0; i < 12; i++) {
+        const status = await withRetry(() => buildStage(next.id));
+        if (status === "ready") break;
+        await wait(10_000);
+      }
+    }
+    startLevelPrep(planId); // write the new stage's levels (no-op if the runner is already going)
+  })()
+    .catch(() => {}) // left 'pending': it's tried again at the next boss fight or app start
+    .finally(() => stageBuilds.delete(key));
+  stageBuilds.set(key, run);
+}
+
+/** Builds any stage that should already be open (its previous boss is beaten) but isn't built yet. */
+export function catchUpStages(bundle: PlanBundle): void {
+  if (USE_MOCK) return;
+  bundle.stages.forEach((s, i) => {
+    if (i === 0 || !s.status || s.status === "ready") return;
+    const prev = bundle.stages[i - 1];
+    // Build it if the previous boss was beaten or the previous boss fight has started (unlocked).
+    if (prev.levels.some((l) => l.type === "boss" && l.status !== "locked")) prepareNextStage(bundle.plan.id, prev.idx);
+  });
+}
+
+// ------------------------------------------------------------------ resume revamp
+
+/**
+ * Rewrites the user's resume with the skills they earned (revamp-resume, Person A's AI).
+ * `resume` comes from the phone (loadResume). Errors are AppErrors; a 409 means no boss beaten yet.
+ */
+export async function revampResume(planId: string, resume: StoredResume): Promise<RevampedResume> {
+  if (USE_MOCK) {
+    await wait(1500);
+    return JSON.parse(JSON.stringify(mockRevamp)) as RevampedResume;
+  }
+  await ensureSession();
+  const { data, error } = await supabase.functions.invoke<RevampedResume>("revamp-resume", {
+    body: { plan_id: planId, resume },
+  });
+  if (error) throw await functionError(error, "Couldn't update your resume.", "revamp-resume");
+  if (!data || !Array.isArray(data.sections)) throw new AppError("Couldn't update your resume. Please try again.");
+  return data;
+}
+
 /** Starts generating the level after this one in the background. Errors are ignored. */
 export function prefetchNextLevel(bundle: PlanBundle | null, levelId: string): void {
-  if (!bundle) return;
+  if (!bundle || isPreparing(bundle.plan.id)) return; // the background runner is already on it
   const all = bundle.stages.flatMap((s) => s.levels);
   const next = all[all.findIndex((l) => l.id === levelId) + 1];
   if (next && !next.generated) ensureLevelGenerated(next.id).catch(() => {});

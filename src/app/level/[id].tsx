@@ -21,14 +21,16 @@ import { ErrorState, LoadingState, Screen } from "@/components/ui";
 import { newRunId } from "@/lib/analytics";
 import {
   completeLevel,
-  ensureLevelGenerated,
+  generateLevelWithRetry,
   getLevelBundle,
   getPlanBundle,
   prefetchNextLevel,
+  prepareNextStage,
   recordAttempt,
 } from "@/lib/api";
 import {
   BOSS_HEARTS,
+  bossHearts,
   PASS_PCT,
   bossMaxHp,
   challengeSeconds,
@@ -70,7 +72,7 @@ async function loadLevel(
   let b = await getLevelBundle(id);
   if (!b.level.generated || b.questions.length === 0) {
     onGenerating();
-    await ensureLevelGenerated(id);
+    await generateLevelWithRetry(id); // shares the request if the background runner is already writing it
     b = await getLevelBundle(id);
   }
   if (b.questions.length === 0)
@@ -139,13 +141,15 @@ export default function LevelScreen() {
           setRevealed(false);
           setHint(null);
           setCorrectCount(0);
-          setHearts(BOSS_HEARTS);
+          setHearts(bossHearts(b.questions.length));
           setHp(bossMaxHp(b.questions.length));
           setTimeLeft(challengeSeconds(extendedTime));
           runIdRef.current = newRunId();
           questionStartRef.current = Date.now();
           setPhase("playing");
           // Prefetch the next level's questions in the background.
+          // Boss fight started: design the next stage now (it unlocks when this boss is beaten).
+          if (b.level.type === "boss") prepareNextStage(b.plan_id, b.stage.idx);
           getPlanBundle(b.plan_id)
             .then((pb) => prefetchNextLevel(pb, id))
             .catch(() => {});
@@ -387,7 +391,7 @@ export default function LevelScreen() {
 
             {isBoss && (
               <View className="mt-4">
-                <BossHPBar hp={hp} maxHp={bossMaxHp(total)} hearts={hearts} />
+                <BossHPBar maxHearts={bossHearts(total)} hp={hp} maxHp={bossMaxHp(total)} hearts={hearts} />
               </View>
             )}
 

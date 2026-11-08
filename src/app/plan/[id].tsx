@@ -1,7 +1,7 @@
 // Game map: Job Match %, XP, and each stage's winding path of level nodes.
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Image,
   Pressable,
@@ -9,13 +9,15 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { getPlanBundle } from "@/lib/api";
+import { catchUpStages, getPlanBundle, startLevelPrep, subscribePrep, type PrepState } from "@/lib/api";
 import { setCurrentPlan } from "@/lib/auth";
 import { pixelColors as c } from "@/lib/theme";
 import type { PlanBundle, StageWithLevels } from "@/lib/types";
 import { LevelNode, NODE_SIZE } from "@/components/LevelNode";
 import { ErrorState, LoadingState, Screen } from "@/components/ui";
 import { Icon, font, outlined, panel } from "@/components/pixel";
+import { PrepStatus } from "@/components/PrepStatus";
+import { RevampBanner } from "@/components/RevampBanner";
 
 const ROW_HEIGHT = 150; // vertical space per level node (node + label)
 const STAGE_PAD = 12;
@@ -46,6 +48,7 @@ export default function MapScreen() {
   const [fontLoaded] = useFonts({ Jersey25_400Regular });
   const [bundle, setBundle] = useState<PlanBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [prep, setPrep] = useState<PrepState | null>(null);
 
   const load = useCallback(() => {
     setError(null);
@@ -53,6 +56,8 @@ export default function MapScreen() {
       .then((b) => {
         setBundle(b);
         setCurrentPlan(b.plan.id); // remembered on the profile for "Continue"
+        startLevelPrep(b.plan.id); // keep writing built stages' levels (no-op if already running)
+        catchUpStages(b); // after an app restart: build a next stage whose boss fight already began
       })
       .catch((e) =>
         setError(e instanceof Error ? e.message : "Couldn't load your map."),
@@ -61,6 +66,17 @@ export default function MapScreen() {
 
   // Reload every time we come back from a level so unlocks show up.
   useFocusEffect(load);
+
+  // Background preparation progress; refresh the map each time another level is ready.
+  // A counter drops a slower, older response so it can't overwrite a newer one.
+  useEffect(() => {
+    let latest = 0;
+    return subscribePrep(id, (state) => {
+      setPrep(state);
+      const mine = ++latest;
+      getPlanBundle(id).then((b) => { if (mine === latest) setBundle(b); }).catch(() => {});
+    });
+  }, [id]);
 
   if (error) {
     return (
@@ -83,7 +99,9 @@ export default function MapScreen() {
   const { plan, skills, stages } = bundle;
   const allLevels = stages.flatMap((s) => s.levels);
   const current = allLevels.find((l) => l.status === "unlocked");
-  const gaps = skills.filter((s) => s.is_gap);
+  // Earned (stage boss beaten) skills leave "To learn"; the DB keeps is_gap for the resume revamp.
+  const gaps = skills.filter((s) => s.is_gap && !s.earned_at);
+  const earned = skills.filter((s) => s.earned_at);
   const gained = plan.match_pct - plan.start_match_pct;
   const isBeaten = (s: StageWithLevels) =>
     s.levels.some((l) => l.type === "boss" && l.status === "completed");
@@ -131,6 +149,12 @@ export default function MapScreen() {
         <View style={{ marginVertical: 10 }}>
           <JobMatchBar pct={plan.match_pct} />
         </View>
+        {earned.length > 0 && (
+          <Text style={font(20)}>
+            <Text style={font(20, c.grassDark)}>Earned: </Text>
+            {earned.map((s) => s.name).join(", ")}
+          </Text>
+        )}
         {gaps.length > 0 && (
           <Text style={font(20)}>
             <Text style={font(20, c.red)}>To learn: </Text>
@@ -138,6 +162,9 @@ export default function MapScreen() {
           </Text>
         )}
       </View>
+
+      <PrepStatus state={prep} />
+      <RevampBanner bundle={bundle} />
 
       {stages.length === 0 ? (
         <View className="mt-8 items-center gap-2 p-6" style={panel}>

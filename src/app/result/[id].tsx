@@ -8,7 +8,9 @@ import {
   outlined,
   panel,
 } from "@/components/pixel";
+import { getPlanBundle } from "@/lib/api";
 import { PASS_PCT } from "@/lib/grading";
+import { isQuestComplete } from "@/lib/resumeDelivery";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
 import type { LevelType } from "@/lib/types";
@@ -69,7 +71,19 @@ export default function ResultScreen() {
     router.dismissTo({ pathname: "/plan/[id]", params: { id: p.planId } });
   const bossWin = p.type === "boss" && passed;
 
-  const title = bossWin
+  // "Quest complete" only when every stage's boss is beaten. No next level can also just mean the
+  // next stage is still being built (stages are designed when their previous boss fight starts).
+  const [questDone, setQuestDone] = useState(false);
+  useEffect(() => {
+    if (!bossWin || p.next) return;
+    let alive = true;
+    getPlanBundle(p.planId).then((b) => { if (alive) setQuestDone(isQuestComplete(b)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [bossWin, p.next, p.planId]);
+  const nextStageBuilding = bossWin && !p.next && !questDone;
+  const title = questDone
+    ? "Quest complete!"
+    : bossWin
     ? "Boss defeated!"
     : passed
       ? "Level complete!"
@@ -147,6 +161,11 @@ export default function ResultScreen() {
               height={12}
               label={`Job match ${after} percent`}
             />
+            {nextStageBuilding && (
+              <Text style={font(18, c.wood)}>
+                Your next stage is being built. It will unlock on the map in a moment.
+              </Text>
+            )}
             {bossWin ? (
               <View className="flex-row items-center gap-1">
                 <Icon name="check-bold" size={18} color={c.grassDark} />
@@ -167,6 +186,17 @@ export default function ResultScreen() {
           </View>
 
           <View className="gap-3">
+            {bossWin && (
+              <PixelButton
+                label="Revamp my resume"
+                icon="file-document-edit-outline"
+                variant={questDone ? "primary" : "secondary"}
+                hint="Rewrites your resume with the skills you just earned"
+                onPress={() =>
+                  router.push({ pathname: "/revamp/[id]", params: { id: p.planId } })
+                }
+              />
+            )}
             {passed && p.next ? (
               <PixelButton
                 label="Next level"

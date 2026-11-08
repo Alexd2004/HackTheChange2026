@@ -26,7 +26,7 @@ async function writeLevel(n: number): Promise<DraftQuestion[]> {
   const draft = await callGemini<DraftQuestions>(
     writeQuestionsPrompt({
       skill: "SQL", type: "normal", title: "Joining tables", objective: "Combine rows from two tables with joins.",
-      concepts: ["INNER JOIN", "LEFT JOIN", "ON clause"], weakConcepts: [], position: { n, of: 6 }, count: 5,
+      concepts: ["INNER JOIN", "LEFT JOIN", "ON clause"], weakConcepts: [], position: { n, of: 3 }, count: 4,
     }),
     questionsSchema, [], 0.8,
   );

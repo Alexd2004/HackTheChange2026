@@ -50,26 +50,26 @@ You design a short learning game for someone applying to be a "${jobTitle}".
 Make ONE stage per skill below, in the same order, using the exact skill name in "skill".
 ${stageSkills.map((g) => `- ${g.name} (they have level ${g.have}/3, job needs ${g.need}/3)`).join("\n")}
 ${mode === "polish"
-  ? `The person already meets the bar for these skills, so each stage is a REVIEW stage. Levels 1 to 6 are a refresher of the key ideas they should already know, in the same order they would learn them. Do not teach advanced new material.
+  ? `The person already meets the bar for these skills, so each stage is a REVIEW stage. Levels 1 to 3 are a refresher of the key ideas they should already know, in the same order they would learn them. Do not teach advanced new material.
 `
   : ""}
-Each stage has exactly 7 levels in this order:
-- levels 1 to 6 (type normal): the fundamentals of the skill, ordered from the very basics up to the more advanced ideas.
+Each stage has exactly 4 levels in this order:
+- levels 1 to 3 (type normal): the fundamentals of the skill, ordered from the very basics up to the more advanced ideas.
   Level 1 starts at the very beginning: what the skill is and why it is used, with no jargon assumed.
   Each level teaches NEW concepts that the earlier levels did not.
-- level 7 (boss): a final exam for the stage. It is NOT about testing code. It re-tests what levels 1 to 6 taught,
-  set in a realistic on-the-job scenario. Its concepts must be concept names (not level titles) picked from levels 1 to 6, with no new topics.
+- level 4 (boss): a final exam for the stage. It is NOT about testing code. It re-tests what levels 1 to 3 taught,
+  set in a realistic on-the-job scenario. Its concepts must be concept names (not level titles) picked from levels 1 to 3, with no new topics.
 For every level: a fun short title (max 5 words), a one-sentence objective, and 2-4 concrete concepts
 (specific things a quiz can test, e.g. "LEFT JOIN", not "databases").
 Stage title: max 4 words, game-like. Summary: one sentence.`;
 
 const typeRules = {
-  normal: "5 questions testing the basics of the concepts. Friendly, clear.",
+  normal: "4 questions testing the basics of the concepts. Friendly, clear.",
   challenge: "6 harder questions that need applying the concepts, not just recalling them.",
-  boss: "8 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Write the first six questions one per earlier level, in order (question 1 tests a concept from the first earlier level listed, question 2 from the second, and so on up to question 6). Make the last two questions mix concepts from two different levels. In every question, set \"concept\" to one concept name taken from the list after that level's title (for example \"LEFT JOIN\", not \"Joining tables\"), never to the level's title itself.",
+  boss: "4 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Write the first three questions one per earlier level, in order (question 1 tests a concept from the first earlier level listed, question 2 from the second, question 3 from the third). Make question 4 mix concepts from two different levels. In every question, set \"concept\" to one concept name taken from the list after that level's title (for example \"LEFT JOIN\", not \"Joining tables\"), never to the level's title itself.",
 } as const;
 
-/** Early levels are gentle and later ones harder, so the six fundamentals levels build up to the boss. */
+/** Early levels are gentle and later ones harder, so the fundamentals levels build up to the boss. */
 function difficultyForPosition({ n, of }: { n: number; of: number }): string {
   const where = `This is level ${n} of ${of} in the stage, so`;
   const share = n / of;
@@ -85,7 +85,7 @@ export const writeQuestionsPrompt = (p: {
   objective: string;
   concepts: string[];
   weakConcepts: string[];
-  earlierLevels?: { title: string; concepts: string[] }[]; // boss only: what levels 1-6 taught
+  earlierLevels?: { title: string; concepts: string[] }[]; // boss only: what levels 1-3 taught
   position?: { n: number; of: number }; // normal levels: this is fundamentals level n of `of` in the stage
   count: number;
 }) => `
@@ -106,6 +106,11 @@ Mix about 60% "mcq" and 40% "blank".
   (e.g. ["GET", "get request"]); options = null and correct_index = null.
   The blank must have one short, unambiguous answer (a word or short phrase).
 - explanation: ONE short sentence on why the answer is right (under 120 characters).
+- hint: ONE short sentence (under 100 characters) shown BEFORE the player answers, to nudge their thinking.
+  It must NEVER give the answer away:
+  * never contain the answer, any accepted answer, or the words of the correct option (not even in other words or a synonym);
+  * never say which option is right or wrong, and never give letters, the first letter, word length, or rhymes;
+  * instead point to the idea to think about (e.g. "Think about which clause filters rows before they are grouped.").
 - concept: the name of one concept from the lists above (a concept name, never a level title).
 - difficulty: 1-3.
 Questions must be factually correct and answerable without seeing anything else.`;
