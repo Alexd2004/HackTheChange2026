@@ -40,7 +40,7 @@ A test is skipped if its key is missing.
 |---|---|
 | `keenable_live_test.ts` | A real search returns parsed resources |
 | `fit_live_test.ts` | Sample resumes vs sample postings: PostgreSQL counts as SQL, a career changer has gaps, "Power BI or Tableau" is one skill, a strong resume has almost no gaps |
-| `map_live_test.ts` | The map has 3 stages of 7 levels, and the boss questions cover the earlier levels |
+| `map_live_test.ts` | The map has 3 stages of 4 levels (3 normal + boss), and the boss questions cover the earlier levels |
 | `shuffle_live_test.ts` | Shuffled multiple-choice questions still pass the verification call |
 | `resources_live_test.ts` | A real search then the real AI picker returns 1 to 3 different links, all from the search results; a nonsense level doesn't crash or invent links |
 | `revamp_live_test.ts` | Real Gemini revamp of a pasted resume and of a PDF: earned skill added, blocked skills absent, contact/employers/dates copied exactly, no invented numbers |

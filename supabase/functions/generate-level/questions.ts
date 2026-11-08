@@ -8,8 +8,8 @@ import { verifyQuestionsPrompt, writeQuestionsPrompt } from "../_shared/prompts.
 import { blankMatches } from "../_shared/grading.ts";
 import { shuffleOptions } from "./shuffle.ts";
 
-const COUNT = { normal: 5, challenge: 6, boss: 8 } as const;
-const MIN = { normal: 4, challenge: 5, boss: 6 } as const;
+const COUNT = { normal: 4, challenge: 4, boss: 4 } as const;
+const MIN = { normal: 3, challenge: 3, boss: 3 } as const;
 const ABSOLUTE_MIN = 3;
 
 export type LevelType = keyof typeof COUNT;
@@ -63,6 +63,7 @@ function cleanQuestion(q: DraftQuestion): DraftQuestion | null {
     explanation: q.explanation?.trim() || "",
     concept: q.concept?.trim() || "",
     difficulty: Math.min(3, Math.max(1, Math.round(q.difficulty || 1))),
+    hint: "", // filled in below once we know the answer
   };
   if (q.kind === "mcq") {
     const options = (q.options ?? []).map((o) => String(o).trim());
@@ -71,12 +72,14 @@ function cleanQuestion(q: DraftQuestion): DraftQuestion | null {
     if (ci === null || ci === undefined || ci < 0 || ci > 3) return null;
     // Gemini tends to put the right answer in the same spot, so shuffle here (before verification sees it).
     const shuffled = shuffleOptions(options, ci);
-    return { ...base, kind: "mcq", options: shuffled.options, correct_index: shuffled.correct_index, answers: null };
+    const hint = safeHint(q.hint, [options[ci]], base.concept, prompt, options.filter((_, k) => k !== ci));
+    return { ...base, hint, kind: "mcq", options: shuffled.options, correct_index: shuffled.correct_index, answers: null };
   }
   if (q.kind === "blank") {
     const answers = (q.answers ?? []).map((a) => String(a).trim()).filter(Boolean).slice(0, 4);
     if ((prompt.match(/____/g) ?? []).length !== 1 || answers.length === 0) return null;
-    return { ...base, kind: "blank", options: null, correct_index: null, answers };
+    const hint = safeHint(q.hint, answers, base.concept, prompt);
+    return { ...base, hint, kind: "blank", options: null, correct_index: null, answers };
   }
   return null;
 }
@@ -95,4 +98,68 @@ async function verify(questions: DraftQuestion[]): Promise<DraftQuestion[]> {
     if (q.kind === "mcq") return a.mcq_index === q.correct_index;
     return a.blank_answer != null && blankMatches(a.blank_answer, q.answers ?? []);
   });
+}
+
+// ---------------------------------------------------------------- hints
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const GENERIC_HINT = "Re-read the question and think about what it is really asking.";
+// Everyday words that don't give anything away even if they appear in the answer.
+const STOPWORDS = new Set([
+  "that", "this", "with", "from", "only", "rows", "into", "when", "what", "which", "will", "your", "have",
+  "both", "each", "more", "than", "then", "them", "they", "their", "there", "where", "about", "using", "used",
+  "data", "table", "tables", "value", "values", "first", "last", "same", "other", "make", "made",
+]);
+/** A word and its simple plural / singular forms ("index" ~ "indexes"). */
+const forms = (w: string) => [w, `${w}s`, `${w}es`, w.replace(/e?s$/, "")];
+
+/** True when `text` gives away one of the answers (ignoring words the player can already see). */
+function leaks(text: string, answers: string[], prompt: string, wrongOptions: string[] = []): boolean {
+  const t = ` ${norm(text)} `;
+  const raw = ` ${text.toLowerCase()} `;
+  const known = new Set(norm(prompt).split(" ")); // words already in the question
+  const shared = new Set(wrongOptions.flatMap((o) => norm(o).split(" "))); // words in wrong options too
+  for (const a of answers) {
+    const ans = norm(a);
+    // Symbol answers ("*", "!=", "%") vanish when normalized: look for the raw symbol instead.
+    if (!ans) {
+      const sym = a.trim().toLowerCase();
+      if (sym && raw.includes(sym) && !prompt.toLowerCase().includes(sym)) return true;
+      continue;
+    }
+    if (t.includes(` ${ans} `)) return true; // the whole answer
+    const words = ans.split(" ");
+    for (const w of words) {
+      if (known.has(w) || shared.has(w) || STOPWORDS.has(w)) continue;
+      const distinctive = w.length >= 4 || (words.length === 1 && w.length >= 2); // short single-word answers ("ON", "GET")
+      if (distinctive && forms(w).some((f) => t.includes(` ${f} `))) return true;
+    }
+  }
+  return false;
+}
+
+/** Trims to `max` characters at a word boundary. */
+function trimWords(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > 40 ? cut.lastIndexOf(" ") : max).replace(/[,;:\s]+$/, "")}…`;
+}
+
+/**
+ * The AI writes a hint that must not reveal the answer. This double-checks it: if the hint contains the
+ * answer, or hands out letters/length/option positions, it's replaced by a safe nudge (checked too).
+ * `wrongOptions` (MCQ only) lets words shared with wrong options through, since they give nothing away.
+ */
+export function safeHint(raw: string | undefined, answers: string[], concept: string, prompt: string, wrongOptions: string[] = []): string {
+  // Only name the concept when it shares no word with the answer (often the concept IS the answer).
+  const conceptWords = norm(concept).split(" ").filter(Boolean);
+  const answerWords = new Set(answers.flatMap((a) => norm(a).split(" ")));
+  const conceptIsSafe = conceptWords.length > 0 && !conceptWords.some((w) => forms(w).some((f) => answerWords.has(f)));
+  const fallback = conceptIsSafe ? `Think about how ${concept} works.` : GENERIC_HINT;
+  const hint = trimWords((raw ?? "").replace(/\s+/g, " ").trim(), 140);
+  if (!hint) return fallback;
+  if (leaks(hint, answers, prompt, wrongOptions)) return fallback;
+  if (/\b(first letter|starts with|begins with|ends with|letters? long|rhymes with|\d+ (letters|characters))\b/i.test(hint)) return fallback;
+  if (/\b(the )?answer is\b|\b(option|answer|choice) ([a-d]|one|two|three|four|\d)\b|\b[a-d]\) |\b(first|second|third|fourth|last) (option|choice|answer)\b/i.test(hint)) return fallback;
+  return hint;
 }

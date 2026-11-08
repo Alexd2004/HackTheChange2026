@@ -2,6 +2,7 @@
 // "Save progress" adds an email + password to that SAME user, so plans and XP are kept.
 // "Sign in" on another device uses that email + password. Mock mode fakes it in memory.
 import { AppError, USE_MOCK, ensureSession, friendly, listPlans, mockProfileStats, resetSession } from "./api";
+import { deleteResume } from "./resume";
 import { supabase } from "./supabase";
 import type { AuthState, Profile } from "./types";
 
@@ -110,6 +111,10 @@ export async function signOut(): Promise<void> {
     notify();
     return;
   }
+  // Remove this account's resumes from the phone first (they're only kept here for the revamp).
+  // Best effort: a failure here must never block signing out.
+  const { data: plans } = await supabase.from("plans").select("id");
+  await Promise.all((plans ?? []).map((p: { id: string }) => deleteResume(p.id).catch(() => {})));
   const { error } = await supabase.auth.signOut();
   if (error) throw authError(error, "Couldn't sign out.");
   resetSession();

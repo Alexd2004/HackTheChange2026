@@ -12,24 +12,24 @@ const gaps = [
 ];
 
 Deno.test({
-  name: "map: 3 stages with 7 levels each, and a boss that covers the earlier levels",
+  name: "map: 3 stages with 4 levels each, and a boss that covers the earlier levels",
   ...opts,
   fn: async () => {
     const map = await callGemini<MapPlan>(buildMapPrompt("Junior Full-Stack Developer", gaps), mapSchema, [], 0.7);
     console.log(`stages: ${map.stages.length}, levels per stage: ${map.stages.map((s) => s.levels.length).join(",")}`);
     const stage = map.stages[0];
     console.log(`\nStage 1 "${stage.title}" (${stage.skill})`);
-    stage.levels.forEach((l, i) => console.log(`  ${i + 1}${i === 6 ? " BOSS" : "     "} ${l.title} :: ${l.concepts.join(" | ")}`));
+    stage.levels.forEach((l, i) => console.log(`  ${i + 1}${i === 3 ? " BOSS" : "     "} ${l.title} :: ${l.concepts.join(" | ")}`));
     assertEquals(map.stages.length, 3);
-    for (const s of map.stages) assertEquals(s.levels.length, 7);
+    for (const s of map.stages) assertEquals(s.levels.length, 4);
 
-    // Boss questions should draw on the six earlier levels.
-    const earlier = stage.levels.slice(0, 6).map((l) => ({ title: l.title, concepts: l.concepts }));
-    const boss = stage.levels[6];
+    // Boss questions should draw on the three earlier levels.
+    const earlier = stage.levels.slice(0, 3).map((l) => ({ title: l.title, concepts: l.concepts }));
+    const boss = stage.levels[3];
     const qs = await callGemini<DraftQuestions>(
       writeQuestionsPrompt({
         skill: stage.skill, type: "boss", title: boss.title, objective: boss.objective, concepts: boss.concepts,
-        weakConcepts: [], earlierLevels: earlier, count: 8,
+        weakConcepts: [], earlierLevels: earlier, count: 4,
       }),
       questionsSchema, [], 0.8,
     );
@@ -41,7 +41,7 @@ Deno.test({
       hits.forEach((h) => covered.add(h));
       console.log(`  Q${i + 1} [${q.kind}] concept="${q.concept}" -> level ${hits.join(",") || "?"}`);
     });
-    console.log(`earlier levels covered by the boss: ${[...covered].sort().join(",")} of 1-6`);
-    assert(covered.size >= 4, "the boss should test most of the earlier levels");
+    console.log(`earlier levels covered by the boss: ${[...covered].sort().join(",")} of 1-3`);
+    assert(covered.size >= 3, "the boss should test every earlier level");
   },
 });

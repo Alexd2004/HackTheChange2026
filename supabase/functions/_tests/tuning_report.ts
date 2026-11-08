@@ -86,20 +86,19 @@ for (const pair of chosen) {
     st.levels.forEach((l, i) => l.concepts.forEach((c) => seen.set(norm(c), (seen.get(norm(c)) ?? 0) + (i < 6 ? 1 : 0))));
     const vague = st.levels.flatMap((l) => l.concepts).filter((c) => VAGUE.test(norm(c)) || norm(c) === norm(st.skill));
     const repeated = [...seen.entries()].filter(([, n]) => n > 1).map(([c]) => c);
-    if (st.levels.length !== 7) warn(st.skill, `${st.levels.length} levels instead of 7`);
+    if (st.levels.length !== 4) warn(st.skill, `${st.levels.length} levels instead of 4`);
     if (vague.length) warn(st.skill, `vague concepts: ${vague.join(", ")}`);
     if (repeated.length) warn(st.skill, `concepts taught in more than one fundamentals level: ${repeated.join(", ")}`);
   }
   const stage = map.stages[0];
   if (!stage) { console.log("   (no stages)"); continue; }
   console.log(`\nStage 1 "${stage.title}" (${stage.skill}) - ${stage.summary}`);
-  stage.levels.forEach((l, i) => console.log(`   ${i + 1}${i === 6 ? " BOSS" : "     "} ${l.title} :: ${l.concepts.join(" | ")}`));
+  stage.levels.forEach((l, i) => console.log(`   ${i + 1}${i === 3 ? " BOSS" : "     "} ${l.title} :: ${l.concepts.join(" | ")}`));
 
   // ---- generate-level: questions + resources in parallel, like the real function
-  const earlier = stage.levels.slice(0, 6).map((l) => ({ title: l.title, concepts: l.concepts }));
+  const earlier = stage.levels.slice(0, 3).map((l) => ({ title: l.title, concepts: l.concepts }));
   const toTry = [
-    { idx: 0, type: "normal" as const }, { idx: 3, type: "normal" as const },
-    { idx: 5, type: "normal" as const }, { idx: 6, type: "boss" as const },
+    { idx: 0, type: "normal" as const }, { idx: 2, type: "normal" as const }, { idx: 3, type: "boss" as const },
   ];
   const diffs: number[] = [];
   for (const { idx, type } of toTry) {
@@ -109,7 +108,7 @@ for (const pair of chosen) {
     const tl = Date.now();
     const [questions, resources] = await Promise.all([
       makeQuestions({ type, title: level.title, objective: level.objective, concepts: level.concepts }, stage.skill, [],
-        type === "boss" ? earlier : [], type === "boss" ? undefined : { n: idx + 1, of: 6 }, (r) => rounds.push(r)),
+        type === "boss" ? earlier : [], type === "boss" ? undefined : { n: idx + 1, of: 3 }, (r) => rounds.push(r)),
       type === "normal" ? findResources({ skill: stage.skill, title: level.title, objective: level.objective, concepts: level.concepts }) : Promise.resolve([]),
     ]);
     const secs = (Date.now() - tl) / 1000;
@@ -124,14 +123,14 @@ for (const pair of chosen) {
     const covered = new Set(questions.flatMap((q) => earlier.flatMap((l, li) => l.concepts.some((c) => norm(c) === norm(q.concept)) ? [li + 1] : [])));
     console.log(`\n${label}: ${secs.toFixed(1)}s (target ${LEVEL_TARGET_S}s)  ${questions.length} questions kept  [${rounds.map((r) => `round ${r.round}: wrote ${r.written}, well-formed ${r.wellFormed}, verified ${r.verified}`).join("; ")}]`);
     console.log(`   mix ${mcq.length} mcq / ${questions.length - mcq.length} blank   difficulty ${d.toFixed(2)}   explanation ${expl} chars   MCQ answer positions A/B/C/D ${positions.join("/")}   resources ${resources.length}`);
-    if (type === "boss") console.log(`   earlier levels covered by the boss: ${[...covered].sort().join(",")} of 1-6`);
+    if (type === "boss") console.log(`   earlier levels covered by the boss: ${[...covered].sort().join(",")} of 1-3`);
     console.log("   " + questions.slice(0, 3).map((q) => `[${q.kind} d${q.difficulty} ${q.concept}] ${q.prompt}`).join("\n   "));
     if (secs > LEVEL_TARGET_S) warn(label, `took ${secs.toFixed(1)}s, over the ${LEVEL_TARGET_S}s target`);
-    if (questions.length < (type === "boss" ? 6 : 4)) warn(label, `only ${questions.length} questions survived`);
+    if (questions.length < 3) warn(label, `only ${questions.length} questions survived`);
     if (offList.length) warn(label, `${offList.length} question(s) use a concept name not in the level's list: ${[...new Set(offList.map((q) => q.concept))].join(", ")}`);
     if (expl > 120) warn(label, `explanations average ${expl} characters`);
     if (type === "normal" && resources.length === 0) warn(label, "no resources found");
-    if (type === "boss" && covered.size < 5) warn(label, `the boss covers only ${covered.size} of the 6 earlier levels`);
+    if (type === "boss" && covered.size < 3) warn(label, `the boss covers only ${covered.size} of the 3 earlier levels`);
   }
   if (diffs.length === 3 && !(diffs[0] <= 1.6 && diffs[2] >= diffs[0] + 0.4)) {
     warn(pair.label, `difficulty does not ramp across levels 1, 4, 6 (${diffs.map((x) => x.toFixed(2)).join(" -> ")})`);

@@ -1,0 +1,49 @@
+{
+  "contact": "Jordan Lee · jordan.lee@example.com · Calgary, AB · linkedin.com/in/jordanlee",
+  "headline": "Junior Software Developer",
+  "summary": "Computer science student who builds web apps with JavaScript and React, now with hands-on SQL practice: writing joins, aggregates and reporting queries against real tables.",
+  "skills": ["JavaScript", "React", "SQL", "Git", "Communication"],
+  "added_skills": ["SQL"],
+  "sections": [
+    {
+      "title": "Experience",
+      "items": [
+        {
+          "heading": "Software Developer Intern",
+          "subheading": "Prairie Labs",
+          "dates": "May 2025 - Aug 2025",
+          "bullets": [
+            "Built React components for an internal dashboard used by 40 staff.",
+            "Fixed 25+ front-end bugs and added unit tests to the checkout flow."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Projects",
+      "items": [
+        {
+          "heading": "Campus Events App",
+          "subheading": "React, Node.js",
+          "dates": "2024",
+          "bullets": ["Made a web app that lists student club events with search and filters."]
+        }
+      ]
+    },
+    {
+      "title": "Education",
+      "items": [
+        {
+          "heading": "BSc Computer Science",
+          "subheading": "University of Calgary",
+          "dates": "2023 - 2027",
+          "bullets": []
+        }
+      ]
+    }
+  ],
+  "changes": [
+    { "type": "added_skill", "where": "Skills", "after": "SQL", "reason": "You beat the Query the Database stage boss." },
+    { "type": "reworded", "where": "Summary", "before": "Computer science student who builds web apps.", "after": "Computer science student who builds web apps with JavaScript and React, now with hands-on SQL practice.", "reason": "Matches the posting's focus on SQL and React." }
+  ]
+}

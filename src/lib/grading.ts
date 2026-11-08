@@ -53,13 +53,27 @@ export function bossMaxHp(questionCount: number): number {
   return Math.max(1, Math.ceil(questionCount * (PASS_PCT / 100)));
 }
 
-/** A hint for normal levels: hides one wrong option (mcq) or reveals the first letter (blank). */
+/**
+ * Hearts = wrong answers you can afford + 1, so running out of hearts is exactly the moment the boss
+ * can no longer be beaten (4 questions: 3 hits needed, 2 hearts). Capped at BOSS_HEARTS.
+ */
+export function bossHearts(questionCount: number): number {
+  return Math.max(1, Math.min(BOSS_HEARTS, questionCount - bossMaxHp(questionCount) + 1));
+}
+
+const GENERIC_HINT = "Re-read the question and think about what it is really asking.";
+
+/**
+ * A hint for normal levels that never gives the answer away: the AI-written hint (checked on the
+ * server), plus one wrong option removed for multiple choice. No first letters, and no concept name
+ * (for fill-in-the-blank the concept is often the answer itself).
+ */
 export function hintFor(q: Question): { text: string; hiddenOption: number | null } {
+  const text = q.hint?.trim() || GENERIC_HINT;
   if (q.kind === "mcq" && q.options) {
     const wrong = q.options.map((_, i) => i).filter((i) => i !== q.correct_index);
     const hidden = wrong[(q.idx + 1) % wrong.length];
-    return { text: `Concept: ${q.concept}. One wrong option removed.`, hiddenOption: hidden };
+    return { text: `${text} (One wrong option removed.)`, hiddenOption: hidden };
   }
-  const first = q.answers?.[0]?.trim()[0] ?? "";
-  return { text: `Concept: ${q.concept}. Starts with "${first.toUpperCase()}".`, hiddenOption: null };
+  return { text, hiddenOption: null };
 }
