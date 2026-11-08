@@ -45,7 +45,7 @@ import {
   xpFor,
 } from "@/lib/grading";
 import { useSettings } from "@/lib/settings";
-import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
+import { pixelColors as c } from "@/lib/theme";
 import type {
   CompleteLevelResultV2,
   LevelBundle,
@@ -468,16 +468,11 @@ export default function LevelScreen() {
               >
                 {levelTitle(bundle.level, bundle.stage.idx)}
               </Text>
-              {/* No tags in boss fights: balance the close button so the title sits truly centered. */}
-              {isBoss && <View className="w-11" />}
-              {/* Boss fights drop the tags: the battle scene says it all. */}
-              {!isBoss && (
-                <View className="flex-row items-center gap-2">
-                  <PixelTag label={levelTypeLabel[type]} />
-                  {isChallenge && (
-                    <PixelTag label="2× XP" icon="lightning-bolt" />
-                  )}
-                </View>
+              {/* Only challenges show a tag (2× XP); otherwise balance the close button so the title sits truly centered. */}
+              {isChallenge && !isBoss ? (
+                <PixelTag label="2× XP" icon="lightning-bolt" />
+              ) : (
+                <View className="w-11" />
               )}
             </View>
 

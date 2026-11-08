@@ -37,8 +37,16 @@ const bossCoins: Record<number, BossCoin> = {
       completed: { x: 1459, y: 25, w: 618, h: 666 },
     },
   },
+  3: {
+    sheet: { src: require("../../assets/maps sprites/level3 boss node.png"), w: 2048, h: 682 },
+    frames: {
+      locked: { x: 76, y: 15, w: 601, h: 636 },
+      unlocked: { x: 721, y: 15, w: 601, h: 636 },
+      completed: { x: 1370, y: 15, w: 601, h: 636 },
+    },
+  },
 };
-// shortcut: stages past 2 reuse the stage-1 coin; add a bossCoins entry when their art exists.
+// shortcut: stages past 3 reuse the stage-1 coin; add a bossCoins entry when their art exists.
 const bossCoinFor = (stage: number) => bossCoins[stage] ?? bossCoins[1];
 const frameFor = (level: Level, stage: number) =>
   (level.type === "boss" ? bossCoinFor(stage).frames : nodeFrames)[level.status];
