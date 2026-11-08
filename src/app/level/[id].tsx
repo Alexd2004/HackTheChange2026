@@ -46,7 +46,12 @@ import {
 } from "@/lib/grading";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
-import type { CompleteLevelResultV2, LevelBundle, LevelType, Question } from "@/lib/types";
+import type {
+  CompleteLevelResultV2,
+  LevelBundle,
+  LevelType,
+  Question,
+} from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -66,7 +71,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-type Phase = "loading" | "generating" | "error" | "playing" | "saving";
+type Phase = "loading" | "generating" | "error" | "playing";
 
 /** A finished run waiting to be saved: kept so "Retry" after a failed save re-sends just this. */
 interface PendingResult {
@@ -140,7 +145,9 @@ export default function LevelScreen() {
   const [hearts, setHearts] = useState(BOSS_HEARTS);
   const [hp, setHp] = useState(1);
   // Boss fight: one event per answer, played by BattleScene (who attacks, who takes the hit).
-  const [hit, setHit] = useState<{ id: number; monkeyWins: boolean } | null>(null);
+  const [hit, setHit] = useState<{ id: number; monkeyWins: boolean } | null>(
+    null,
+  );
   const [hint, setHint] = useState<{
     text: string;
     hiddenOption: number | null;
@@ -154,6 +161,8 @@ export default function LevelScreen() {
   const questionStartRef = useRef(0);
   // Set once the player taps the last "Next": blocks a double tap from saving the level twice.
   const finishingRef = useRef(false);
+  // Saving a win keeps the level on screen: the final button turns into a disabled "Saving…".
+  const [saving, setSaving] = useState(false);
   // The finished run while it's being saved; "Retry" after a failed save re-sends it.
   const pendingRef = useRef<PendingResult | null>(null);
   // Job Match % when the level opened (the result screen's "before"), read once at load.
@@ -192,7 +201,9 @@ export default function LevelScreen() {
           // While the background runner is preparing it already covers the next level: just read the %.
           beforeRef.current = null;
           if (isPreparing(b.plan_id)) {
-            getPlanMatchPct(b.plan_id).then((m) => { beforeRef.current = m; });
+            getPlanMatchPct(b.plan_id).then((m) => {
+              beforeRef.current = m;
+            });
           } else {
             getPlanBundle(b.plan_id)
               .then((pb) => {
@@ -341,13 +352,15 @@ export default function LevelScreen() {
   async function saveAndShow(r: PendingResult) {
     let after: CompleteLevelResultV2 | null = null;
     if (r.passed) {
-      setPhase("saving");
+      setSaving(true);
+      setPhase("playing"); // a Retry from the error screen comes back to the finished level
       try {
         after = await completeLevel(r.levelId, r.savedScore, r.xp);
       } catch (e) {
         setError(
           e instanceof Error ? e.message : "Couldn't save your progress.",
         );
+        setSaving(false);
         setPhase("error"); // Retry calls saveAndShow(pendingRef.current) again
         return;
       }
@@ -397,10 +410,10 @@ export default function LevelScreen() {
         <LoadingState message="Writing your questions… (about 10 seconds)" />
       </Screen>
     );
-  if (phase === "saving" || !bundle || !q)
+  if (!bundle || !q)
     return (
       <Screen>
-        <LoadingState message="Saving your progress…" />
+        <LoadingState message="Loading level…" />
       </Screen>
     );
 
@@ -618,14 +631,17 @@ export default function LevelScreen() {
             <View className="mt-6">
               {revealed ? (
                 <PixelButton
+                  disabled={saving}
                   label={
-                    bossOver
-                      ? hp === 0
-                        ? "Finish the boss"
-                        : "See results"
-                      : isLast
-                        ? "See results"
-                        : "Next question"
+                    saving
+                      ? "Saving…"
+                      : bossOver
+                        ? hp === 0
+                          ? "Finish the boss"
+                          : "See results"
+                        : isLast
+                          ? "See results"
+                          : "Next question"
                   }
                   onPress={next}
                   variant={isBoss ? "danger" : "primary"}
