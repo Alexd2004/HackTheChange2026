@@ -70,16 +70,16 @@ Deno.test("revamp: sentences, bullets and headlines that mention a blocked skill
   assertEquals(out.sections[0].items[0].bullets, ["Built a React dashboard."]);
 });
 
-Deno.test("revamp: a change that adds a blocked skill is dropped, others are kept", () => {
+Deno.test("revamp: the AI's own edits are ignored; the only changes listed are the earned skills added", () => {
   const out = enforceRules(
-    raw({ changes: [
-      { type: "added_skill", where: "Skills", before: null, after: "AWS", reason: "x" },
+    raw({ skills: ["React"], changes: [
       { type: "reworded", where: "Experience", before: "old", after: "new", reason: "y" },
+      { type: "reordered", where: "Skills", before: null, after: "React first", reason: "x" },
     ] }),
     rules,
   );
-  assertEquals(out.changes.map((c) => c.after), ["new"]);
-  assertEquals(out.changes[0].before, "old");
+  assertEquals(out.changes.map((c) => c.type), ["added_skill"]);
+  assertEquals(out.changes[0].after, "Docker");
 });
 
 Deno.test("revamp: employers, titles and dates pass through untouched", () => {

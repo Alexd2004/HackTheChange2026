@@ -3,6 +3,13 @@
 import type { LevelType, Question } from "./types";
 
 export const PASS_PCT = 60;
+
+/**
+ * Admin/testing bypass: EXPO_PUBLIC_ADMIN_BYPASS=1 makes every finished level count as passed, even
+ * under 60% or after losing a boss fight (the server is sent at least the pass mark). For testing and
+ * demos only: EXPO_PUBLIC_ values are built into the app, so never ship a build with this on.
+ */
+export const ADMIN_BYPASS = process.env.EXPO_PUBLIC_ADMIN_BYPASS === "1";
 export const XP_PER_CORRECT = 10;
 export const BOSS_HEARTS = 3;
 

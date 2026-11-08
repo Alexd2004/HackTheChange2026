@@ -221,7 +221,8 @@ export default function RevampScreen() {
           {phase !== "loading" && progress?.canRevamp && phase !== "done" && (
             <Panel>
               {resume ? (
-                <Row icon="check-bold" color={c.grassDark} text="Your resume is saved on this phone." />
+                <Row icon="file-document-outline" color={c.wood}
+                  text="Ready to update the resume you uploaded for this quest. We'll add the skills you earned to its Skills section." />
               ) : (
                 <>
                   <Row icon="file-alert-outline" color={c.red} text="We need your resume again (it's only kept on the phone you uploaded it on)." />
@@ -244,10 +245,13 @@ export default function RevampScreen() {
           {phase === "done" && revamped && (
             <>
               <Panel>
-                <Text style={font(26, c.outline)}>{revamped.headline}</Text>
+                <Row icon="check-bold" color={c.grassDark} text="Your resume is updated." />
+                <Text style={font(18, c.wood)}>
+                  Everything else is kept exactly as you wrote it. We only added your earned skills to the Skills section.
+                </Text>
                 {revamped.added_skills.length > 0 && (
                   <>
-                    <Text style={font(20)}>New skills added:</Text>
+                    <Text style={font(20)}>Skills added:</Text>
                     <View className="flex-row flex-wrap gap-2">
                       {revamped.added_skills.map((s) => (
                         <View key={s} className="px-2 py-1" style={{ backgroundColor: c.grass, borderWidth: 2, borderColor: c.outline }}>
@@ -257,9 +261,7 @@ export default function RevampScreen() {
                     </View>
                   </>
                 )}
-                {revamped.changes.slice(0, 5).map((ch, i) => (
-                  <Row key={i} icon="pencil" color={c.wood} text={`${ch.where}: ${ch.reason}`} />
-                ))}
+
               </Panel>
 
               <Panel>
