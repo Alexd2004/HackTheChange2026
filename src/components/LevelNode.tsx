@@ -77,8 +77,8 @@ export const playerFeetY = (level: Level) => {
 };
 
 export function LevelNode({
-  level, number, isCurrent, hidePlayer, onPress,
-}: { level: Level; number: number; isCurrent: boolean; hidePlayer?: boolean; onPress: () => void }) {
+  level, title = level.title, number, isCurrent, hidePlayer, onPress,
+}: { level: Level; title?: string; number: number; isCurrent: boolean; hidePlayer?: boolean; onPress: () => void }) {
   const { motionOff } = useSettings();
   const scale = useSharedValue(1);
 
@@ -105,7 +105,7 @@ export function LevelNode({
         onPress={onPress}
         disabled={locked}
         accessibilityRole="button"
-        accessibilityLabel={`${levelTypeLabel[level.type]} ${number}: ${level.title}, ${stateText}${isCurrent ? ", you are here" : ""}`}
+        accessibilityLabel={`${levelTypeLabel[level.type]} ${number}: ${title}, ${stateText}${isCurrent ? ", you are here" : ""}`}
         accessibilityState={{ disabled: locked }}
         hitSlop={8}>
         <Animated.View style={pulse}>
@@ -130,7 +130,7 @@ export function LevelNode({
         numberOfLines={2}
         className="mt-1 px-2 text-center"
         style={{ ...font(18, locked ? c.stoneDark : c.wood), backgroundColor: c.parchment, borderWidth: 2, borderColor: c.wood }}>
-        {level.title}
+        {title}
       </Text>
     </View>
   );

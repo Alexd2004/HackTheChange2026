@@ -24,6 +24,7 @@ import { RevampBanner } from "@/components/RevampBanner";
 import { ErrorState, LoadingState, Screen } from "@/components/ui";
 import { catchUpStages, getPlanBundle, startLevelPrep, subscribePrep, type PrepState } from "@/lib/api";
 import { setCurrentPlan } from "@/lib/auth";
+import { levelTitle } from "@/lib/bosses";
 import { takeFinishedLevel } from "@/lib/progress";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
@@ -527,6 +528,7 @@ function StageSection({
                 >
                   <LevelNode
                     level={level}
+                    title={levelTitle(level, stageNumber - 1)}
                     number={levelOffset + i + 1}
                     isCurrent={level.id === currentId}
                     hidePlayer={running}
