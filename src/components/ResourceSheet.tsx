@@ -11,10 +11,19 @@ import {
   Text,
   View,
 } from "react-native";
+import { useState } from "react";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  SlideOutDown,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "@/lib/theme";
-import { Icon } from "./pixel";
-import { Button } from "./ui";
+import { useSettings } from "@/lib/settings";
+import { pixelColors as c } from "@/lib/theme";
+import { Icon, PixelButton, field, font } from "./pixel";
+
+const SLIDE_MS = 250;
 
 export function ResourceSheet({
   visible,
@@ -28,71 +37,127 @@ export function ResourceSheet({
   /** Called once the user comes back from a resource. durationMs is null when it can't be measured (web). */
   onOpened?: (resource: Resource, durationMs: number | null) => void;
 }) {
+  const { motionOff } = useSettings();
+  // Closing slides the sheet down first; the Modal (and its shade) only goes away once it's down.
+  const [closing, setClosing] = useState(false);
+  // Reset only when the sheet is opened again: resetting on close would remount the sheet while
+  // the Modal is still hiding and slide it down a second time.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setClosing(false);
+  }
+  const close = () => {
+    if (motionOff) return onClose();
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, SLIDE_MS);
+  };
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none" // backdrop shows at once; only the sheet slides up (below)
       transparent
-      onRequestClose={onClose}
+      onRequestClose={close}
     >
+      {/* Full-screen shade: fades in/out on its own; never moves with the sheet. */}
+      {!closing && (
+        <Animated.View
+          // Plain styles: NativeWind className isn't applied to Reanimated views here.
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+          }}
+          pointerEvents="none"
+          entering={motionOff ? undefined : FadeIn.duration(SLIDE_MS)}
+          exiting={motionOff ? undefined : FadeOut.duration(SLIDE_MS)}
+        />
+      )}
       <Pressable
-        className="flex-1 bg-black/60"
-        onPress={onClose}
+        className="flex-1"
+        onPress={close}
         accessibilityLabel="Close resources"
         accessibilityRole="button"
       />
-      <SafeAreaView
-        edges={["bottom"]}
-        className="max-h-[75%] rounded-t-3xl border-t border-line bg-panel"
-      >
-        <View className="w-full max-w-[480px] self-center px-4 pt-3">
-          <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-line" />
-          <Text
-            className="text-xl font-bold text-fg"
-            accessibilityRole="header"
+      {/* Pixel parchment sheet; resource rows match the hint box (cream + wood). */}
+      {!closing && (
+        <Animated.View
+          style={{ maxHeight: "75%" }}
+          entering={motionOff ? undefined : SlideInDown.duration(SLIDE_MS)}
+          exiting={motionOff ? undefined : SlideOutDown.duration(SLIDE_MS)}
+        >
+          <SafeAreaView
+            edges={["bottom"]}
+            style={{
+              backgroundColor: c.parchment,
+              borderTopWidth: 4,
+              borderColor: c.wood,
+            }}
           >
-            Resources
-          </Text>
-          <Text className="mt-1 mb-4 text-sm text-muted">
-            Open one, then come back to the question.
-          </Text>
-          <ScrollView contentContainerClassName="gap-3 pb-4">
-            {resources.length === 0 ? (
-              <Text className="text-base text-muted">
-                No resources found for this level.
+            <View className="w-full max-w-[480px] self-center px-4 pt-3">
+              <View
+                className="mb-4 h-1.5 w-12 self-center"
+                style={{ backgroundColor: c.wood }}
+              />
+              <Text style={font(28)} accessibilityRole="header">
+                Resources
               </Text>
-            ) : (
-              resources.map((r) => (
-                <Pressable
-                  key={r.id}
-                  onPress={() =>
-                    // Only record opens that really happened (a failed/duplicate open is not logged).
-                    openAndTime(r.url)
-                      .then((ms) => onOpened?.(r, ms))
-                      .catch(() => {})
-                  }
-                  accessibilityRole="link"
-                  accessibilityLabel={`${r.title}. Opens in browser.`}
-                  className="min-h-[56px] rounded-2xl border border-line bg-raised p-4 active:opacity-80">
-                  <View className="flex-row items-start gap-2">
-                    <Text className="flex-1 text-base font-semibold text-fg">{r.title}</Text>
-                    <Icon name="open-in-new" size={18} color={colors.muted} />
-                  </View>
-                  {r.snippet ? <Text numberOfLines={2} className="mt-1 text-sm leading-5 text-muted">{r.snippet}</Text> : null}
-                  <Text numberOfLines={1} className="mt-1 text-xs text-normal">{hostOf(r.url)}</Text>
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-          <View className="pb-3">
-            <Button
-              label="Back to question"
-              variant="secondary"
-              onPress={onClose}
-            />
-          </View>
-        </View>
-      </SafeAreaView>
+              <Text className="mb-4" style={font(18, c.dirtEdge)}>
+                Open one, then come back to the question.
+              </Text>
+              <ScrollView contentContainerClassName="gap-3 pb-4">
+                {resources.length === 0 ? (
+                  <Text style={font(18)}>
+                    No resources found for this level.
+                  </Text>
+                ) : (
+                  resources.map((r) => (
+                    <Pressable
+                      key={r.id}
+                      onPress={() =>
+                        // Only record opens that really happened (a failed/duplicate open is not logged).
+                        openAndTime(r.url)
+                          .then((ms) => onOpened?.(r, ms))
+                          .catch(() => {})
+                      }
+                      accessibilityRole="link"
+                      accessibilityLabel={`${r.title}. Opens in browser.`}
+                      className="min-h-[56px] p-3 active:opacity-80"
+                      style={{ ...field, borderWidth: 3 }}
+                    >
+                      <View className="flex-row items-start gap-2">
+                        <Text className="flex-1" style={font(20)}>
+                          {r.title}
+                        </Text>
+                        <Icon name="open-in-new" size={18} color={c.wood} />
+                      </View>
+                      {r.snippet ? (
+                        <Text numberOfLines={2} style={font(16)}>
+                          {r.snippet}
+                        </Text>
+                      ) : null}
+                      <Text numberOfLines={1} style={font(15, c.dirtEdge)}>
+                        {hostOf(r.url)}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+              <View className="pb-14">
+                <PixelButton
+                  label="Back to question"
+                  variant="secondary"
+                  onPress={close}
+                />
+              </View>
+            </View>
+          </SafeAreaView>
+        </Animated.View>
+      )}
     </Modal>
   );
 }

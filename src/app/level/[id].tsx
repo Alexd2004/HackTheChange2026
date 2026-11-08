@@ -43,7 +43,7 @@ import {
   xpFor,
 } from "@/lib/grading";
 import { useSettings } from "@/lib/settings";
-import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
+import { pixelColors as c } from "@/lib/theme";
 import type { CompleteLevelResultV2, LevelBundle } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import * as Haptics from "expo-haptics";
