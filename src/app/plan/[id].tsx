@@ -406,10 +406,15 @@ function StageSection({
   const ovFrom = running ? fromI : restI;
   const ovTo = running ? toI : restI;
   const runY = nodeY(ovFrom) + (nodeY(ovTo) - nodeY(ovFrom)) * p;
+  // A stage still being built in the background has no levels yet: no player to place.
+  const fromLevel = stage.levels[ovFrom];
+  const toLevel = stage.levels[ovTo];
   const feetY =
-    runY +
-    playerFeetY(stage.levels[ovFrom]) +
-    (playerFeetY(stage.levels[ovTo]) - playerFeetY(stage.levels[ovFrom])) * p;
+    fromLevel && toLevel
+      ? runY +
+        playerFeetY(fromLevel) +
+        (playerFeetY(toLevel) - playerFeetY(fromLevel)) * p
+      : 0;
 
   return (
     <View
