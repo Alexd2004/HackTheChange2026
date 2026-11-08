@@ -113,6 +113,14 @@ const TOWERS: Record<number, Tower> = {
     },
     crop: { x: 284, y: 48, w: 957, h: 927 },
   },
+  3: {
+    sheet: {
+      src: require("../../../assets/maps sprites/level3 boss tower.png"),
+      w: 1536,
+      h: 1024,
+    },
+    crop: { x: 283, y: 49, w: 959, h: 928 },
+  },
 };
 // Castle box in winding-road-image fractions: just right of the boss coin, centred on it, measured
 // clear of the sandy road.
@@ -447,6 +455,7 @@ function StageSection({
           ? CURVE_FRACS[i] * roadHeight - ROAD_TUCK
           : (i + 0.5) * ROW_HEIGHT;
   const [contentHeight, setContentHeight] = useState(0);
+  const [bannerHeight, setBannerHeight] = useState(0);
   const bossIcon = bossIcons[stageNumber - 1] ?? bossIcons[0];
 
   // Run the monkey along the road from the level just passed to the current one (same stage only).
@@ -494,6 +503,7 @@ function StageSection({
             borderColor: c.outline,
             boxShadow: locked ? "none" : "0 0 14px 4px rgba(255,211,77,0.85)",
           }}
+          onLayout={(e) => setBannerHeight(e.nativeEvent.layout.height)}
           accessible
           accessibilityRole="header"
           accessibilityLabel={`Stage ${stageNumber}: ${stage.title}. Skill: ${skillName}. ${building ? "Being built" : locked ? "Locked" : `${done} of ${stage.levels.length} levels done${beaten ? ", stage beaten" : ""}`}.`}
@@ -625,7 +635,7 @@ function StageSection({
           importantForAccessibility="no-hide-descendants"
         />
       )}
-      {/* Open/collapse arrow: bottom-right of the stage, whether collapsed or open. */}
+      {/* Open/collapse arrow: hangs off the banner's bottom-right corner, whether collapsed or open. */}
       <Pressable
         onPress={() => setOpen((o) => !o)}
         hitSlop={6}
@@ -636,7 +646,7 @@ function StageSection({
         style={{
           position: "absolute",
           right: 8,
-          bottom: 8,
+          top: STAGE_PAD + bannerHeight - 14,
           zIndex: 3,
           width: ARROW,
           height: ARROW,
