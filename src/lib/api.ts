@@ -5,7 +5,7 @@ import mockLevels from "../mock/level.json";
 import mockPlan from "../mock/plan.json";
 import { supabase, supabaseConfigured } from "./supabase";
 import type {
-  AttemptDetails, CompleteLevelResultV2, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage, RevampedResume,
+  AttemptDetails, CompleteLevelResultV2, CreatePlanInput, Level, LevelBundle, Plan, PlanBundle, Question, Resource, Stage, RevampedResume, PlanSummary,
 } from "./types";
 import type { StoredResume } from "./resumeStore";
 import mockRevamp from "../mock/revamp.json";
@@ -173,6 +173,29 @@ export async function importDemoPlan(): Promise<string> {
   const { data, error } = await supabase.rpc("import_plan", { bundle: demoBundle, level_content: demoLevels });
   if (error) throw friendly(error, "Couldn't load the demo plan.");
   return data as string;
+}
+
+/**
+ * All of this account's plans with their progress, newest first (works on any phone: it comes from
+ * the server, not the device). Ongoing plans first, finished ones after.
+ */
+export async function listPlanSummaries(): Promise<PlanSummary[]> {
+  const summarize = (plan: Plan, stages: { levels: { type: string; status: string }[] }[]): PlanSummary => {
+    const stagesBeaten = stages.filter((s) => s.levels.some((l) => l.type === "boss" && l.status === "completed")).length;
+    return { plan, stagesTotal: stages.length, stagesBeaten, complete: stages.length > 0 && stagesBeaten === stages.length };
+  };
+  if (USE_MOCK) return mock.hasPlan ? [summarize(mock.bundle.plan, mock.bundle.stages)] : [];
+  await ensureSession();
+  const { data, error } = await supabase
+    .from("plans")
+    .select("*, stages(levels(type, status))")
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) throw friendly(error, "Couldn't load your plans.");
+  const all = (data as (Plan & { stages: { levels: { type: string; status: string }[] }[] })[]).map(({ stages, ...plan }) =>
+    summarize(plan, stages ?? []),
+  );
+  return [...all.filter((p) => !p.complete), ...all.filter((p) => p.complete)];
 }
 
 export async function listPlans(): Promise<Plan[]> {

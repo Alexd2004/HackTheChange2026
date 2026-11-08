@@ -8,18 +8,19 @@ import {
   Sprite,
   type Sheet,
 } from "@/components/pixel";
+import { PlanList } from "@/components/PlanList";
 import { ProgressHeader } from "@/components/ProgressHeader";
 import {
   AppError,
   importDemoPlan,
-  listPlans,
+  listPlanSummaries,
   setPendingPlanInput,
   USE_MOCK,
 } from "@/lib/api";
 import { getProfile } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
-import type { Plan } from "@/lib/types";
+import type { PlanSummary } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -76,7 +77,7 @@ export default function UploadScreen() {
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plans, setPlans] = useState<PlanSummary[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   // While a text field is focused the keyboard eats the screen: show only that field, hide the footer, offer a Done button.
   const [focused, setFocused] = useState<"resume" | "posting" | null>(null);
@@ -97,7 +98,7 @@ export default function UploadScreen() {
   useFocusEffect(
     useCallback(() => {
       setPeek(0); // back on this screen: he's peeking again
-      listPlans()
+      listPlanSummaries()
         .then(setPlans)
         .catch(() => setPlans([]));
       getProfile()
@@ -106,7 +107,7 @@ export default function UploadScreen() {
     }, []),
   );
   // "Continue" = the plan the user last opened (profile), else the newest one.
-  const continuePlan = plans.find((p) => p.id === currentPlanId) ?? plans[0];
+  const continuePlan = (plans.find((p) => p.plan.id === currentPlanId) ?? plans[0])?.plan;
 
   const resumeReady = mode === "pdf" ? !!pdf : resumeText.trim().length >= 100;
   const postingReady = posting.trim().length >= 80;
@@ -249,36 +250,10 @@ export default function UploadScreen() {
                 </View>
               </Animated.View>
 
-              {continuePlan && (
+              {continuePlan && !typing && (
                 <Animated.View entering={rowIn(2)}>
-                  <Pressable
-                    onPress={() =>
-                      router.push({
-                        pathname: "/plan/[id]",
-                        params: { id: continuePlan.id },
-                      })
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Continue your plan for ${continuePlan.job_title}, ${continuePlan.match_pct}% match`}
-                    className="mt-4 flex-row items-center justify-between px-3 py-2 active:opacity-80"
-                    style={{
-                      backgroundColor: c.parchment,
-                      borderWidth: 3,
-                      borderColor: c.wood,
-                      boxShadow: `5px 5px 0 ${c.outline}`,
-                    }}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      className="flex-1 pr-3"
-                      style={font(20)}
-                    >
-                      Continue: {continuePlan.job_title}
-                    </Text>
-                    <Text style={font(24, c.grassDark)}>
-                      {continuePlan.match_pct}%
-                    </Text>
-                  </Pressable>
+                  {/* "Your quests": every plan on this account, the last-opened one on top as "Continue". */}
+                  <PlanList plans={plans} currentPlanId={currentPlanId} />
                 </Animated.View>
               )}
 

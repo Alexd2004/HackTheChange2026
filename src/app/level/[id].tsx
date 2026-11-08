@@ -29,6 +29,7 @@ import {
   recordAttempt,
 } from "@/lib/api";
 import {
+  ADMIN_BYPASS,
   BOSS_HEARTS,
   bossHearts,
   PASS_PCT,
@@ -248,7 +249,11 @@ export default function LevelScreen() {
   async function finish() {
     if (!bundle) return;
     const score = scorePct(correctCount, total);
-    const passed = isBoss ? hp === 0 : score >= PASS_PCT;
+    const earnedPass = isBoss ? hp === 0 : score >= PASS_PCT;
+    // Admin bypass (EXPO_PUBLIC_ADMIN_BYPASS=1): pass anyway; the server needs at least the pass mark.
+    const bypassed = ADMIN_BYPASS && !earnedPass;
+    const passed = earnedPass || bypassed;
+    const savedScore = bypassed ? Math.max(score, PASS_PCT) : score;
     const xp = xpFor(correctCount, type);
     let after: CompleteLevelResultV2 | null = null;
     const before = await getPlanBundle(bundle.plan_id)
@@ -257,7 +262,7 @@ export default function LevelScreen() {
     if (passed) {
       setPhase("saving");
       try {
-        after = await completeLevel(bundle.level.id, score, xp);
+        after = await completeLevel(bundle.level.id, savedScore, xp);
       } catch (e) {
         setError(
           e instanceof Error ? e.message : "Couldn't save your progress.",
@@ -281,6 +286,7 @@ export default function LevelScreen() {
         before: String(before ?? after?.match_pct ?? 0),
         after: String(after?.match_pct ?? before ?? 0),
         bossLost: isBoss && !passed ? "1" : "0",
+        bypass: bypassed ? "1" : "0",
       },
     });
   }

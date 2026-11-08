@@ -80,6 +80,14 @@ export interface StageWithLevels extends Stage {
   levels: Level[];
 }
 
+/** One plan in the start screen's "Your quests" list, with its progress. */
+export interface PlanSummary {
+  plan: Plan;
+  stagesTotal: number;
+  stagesBeaten: number; // stage boss completed
+  complete: boolean; // every stage boss beaten
+}
+
 /** Everything the map screen needs. */
 export interface PlanBundle {
   plan: Plan;

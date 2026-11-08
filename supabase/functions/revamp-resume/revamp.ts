@@ -29,7 +29,7 @@ interface RawRevamp {
   summary: string;
   skills: string[];
   sections: ResumeSection[];
-  changes: (Omit<ResumeChange, "before"> & { before: string | null })[];
+  changes?: unknown; // ignored: the AI only transcribes; code lists the (skill-only) changes
 }
 
 export interface PlanSkill { id: string; name: string; is_gap: boolean; have_level: number }
@@ -88,12 +88,8 @@ export function enforceRules(raw: RawRevamp, rules: SkillRules): RevampedResume 
     if (skills.some((k) => normalize(k) === normalize(s))) continue;
     skills.push(s);
   }
+  // The only edit a revamp makes: earned skills appended to the end of the resume's own Skills list.
   const changes: ResumeChange[] = [];
-  for (const c of raw.changes ?? []) {
-    if (!["added_skill", "reworded", "reordered", "removed"].includes(c.type)) continue;
-    if (mentionsBlocked(c.after ?? "")) continue; // a change that adds a blocked skill is dropped with it
-    changes.push({ type: c.type, where: c.where, ...(c.before ? { before: c.before } : {}), after: c.after, reason: c.reason });
-  }
   for (const a of rules.allowedNew) {
     if (!skills.some((k) => normalize(k) === normalize(a) || mentions(k, a))) {
       skills.push(a);

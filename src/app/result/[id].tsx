@@ -42,6 +42,7 @@ type Params = {
   before: string;
   after: string;
   bossLost: string;
+  bypass?: string; // "1" = passed only because of the admin bypass
 };
 
 export default function ResultScreen() {
@@ -82,16 +83,25 @@ export default function ResultScreen() {
   };
   const bossWin = p.type === "boss" && passed;
 
-  // "Quest complete" only when every stage's boss is beaten. No next level can also just mean the
-  // next stage is still being built (stages are designed when their previous boss fight starts).
+  // After a boss win, read the plan: "Quest complete" only when every stage's boss is beaten, and
+  // "next stage is being built" while the stage after this one is still being designed
+  // (stages are designed when their previous boss fight starts).
   const [questDone, setQuestDone] = useState(false);
+  const [nextStageBuilding, setNextStageBuilding] = useState(false);
   useEffect(() => {
-    if (!bossWin || p.next) return;
+    if (!bossWin) return;
     let alive = true;
-    getPlanBundle(p.planId).then((b) => { if (alive) setQuestDone(isQuestComplete(b)); }).catch(() => {});
+    getPlanBundle(p.planId)
+      .then((b) => {
+        if (!alive) return;
+        setQuestDone(isQuestComplete(b));
+        const here = b.stages.findIndex((s) => s.levels.some((l) => l.id === p.id));
+        const next = here >= 0 ? b.stages[here + 1] : undefined;
+        setNextStageBuilding(!!next && !!next.status && next.status !== "ready");
+      })
+      .catch(() => {});
     return () => { alive = false; };
-  }, [bossWin, p.next, p.planId]);
-  const nextStageBuilding = bossWin && !p.next && !questDone;
+  }, [bossWin, p.id, p.planId]);
   const title = questDone
     ? "Quest complete!"
     : bossWin
@@ -133,6 +143,15 @@ export default function ResultScreen() {
               {!passed && p.bossLost !== "1" ? ` (need ${PASS_PCT}%)` : ""}
             </Text>
           </View>
+
+          {p.bypass === "1" && (
+            <View className="flex-row items-center gap-2 self-center px-3 py-1"
+              style={{ backgroundColor: c.red, borderWidth: 3, borderColor: c.outline }}
+              accessibilityRole="text" accessibilityLabel="Admin bypass: passed below the 60 percent pass mark">
+              <Icon name="shield-key" size={18} color={c.cream} />
+              <Text style={font(18, c.cream)}>Admin bypass: passed below {PASS_PCT}%</Text>
+            </View>
+          )}
 
           <View className="flex-row gap-3">
             <Stat
