@@ -22,7 +22,13 @@ import {
 import { PrepStatus } from "@/components/PrepStatus";
 import { RevampBanner } from "@/components/RevampBanner";
 import { ErrorState, LoadingState, Screen } from "@/components/ui";
-import { catchUpStages, getPlanBundle, startLevelPrep, subscribePrep, type PrepState } from "@/lib/api";
+import {
+  catchUpStages,
+  getPlanBundle,
+  startLevelPrep,
+  subscribePrep,
+  type PrepState,
+} from "@/lib/api";
 import { setCurrentPlan } from "@/lib/auth";
 import { levelTitle } from "@/lib/bosses";
 import { takeFinishedLevel } from "@/lib/progress";
@@ -40,7 +46,6 @@ import {
   View,
 } from "react-native";
 
-
 // Monkey's run to the next level: idle at the finished level, crossfade into running (already
 // moving), run along the road, crossfade back to idle on arrival. Idle + run opacity always sum to 1.
 const RUN_HOLD = 250;
@@ -51,12 +56,30 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const ROW_HEIGHT = 150; // vertical space per level node (node + label)
 const STAGE_PAD = 12;
 const STAGE_BORDER = 4;
+const ARROW = 36; // stage open/collapse arrow button
 const ROAD_TUCK = 24; // how far the road runs up under the banner
 const ROAD_TAIL = ROW_HEIGHT / 3; // room under the last node's label
 
 const background = require("../../../assets/maps sprites/main background.png");
 const monkey = require("../../../assets/Icons and border/monkey icon.png");
-const bossIcon = require("../../../assets/Icons and border/level1 boss icon.png");
+// Banner boss icon per stage (sized to each image's aspect); stages past 3 reuse stage 1's.
+const bossIcons = [
+  {
+    src: require("../../../assets/Icons and border/level1 boss icon.png"),
+    w: 64,
+    h: 64,
+  },
+  {
+    src: require("../../../assets/Icons and border/level2 boss icon.png"),
+    w: 80,
+    h: 80 * (1024 / 1536),
+  },
+  {
+    src: require("../../../assets/Icons and border/level3 boss icon.png"),
+    w: 64,
+    h: 64,
+  },
+];
 const ICON_SIZE = 64;
 const XP_GREEN = "#7BD91F";
 const road = require("../../../assets/maps sprites/winding path.png");
@@ -68,27 +91,42 @@ const ROAD_CENTER = [
   0.49, 0.35, 0.25, 0.24, 0.36, 0.47, 0.49,
 ];
 
-// Stage 1 boss castle: the boss sits on the road's last curve, the castle stands just to its right.
-const TOWER_ROOM = 40; // extra room in stage 1 above the boss
+// Every stage: the boss sits on the road's last curve, its castle (if the stage has one) just right of it.
+const TOWER_ROOM = 40; // extra room above the boss
 const APEX_FRAC = 1920 / 2172; // last left-hand curve of the winding road image
-const tower: Sheet = {
-  src: require("../../../assets/maps sprites/level1 boss tower.png"),
-  w: 1536,
-  h: 1024,
+type Tower = { sheet: Sheet; crop: Frame }; // crop = the castle's solid bounds
+const TOWERS: Record<number, Tower> = {
+  1: {
+    sheet: {
+      src: require("../../../assets/maps sprites/level1 boss tower.png"),
+      w: 1536,
+      h: 1024,
+    },
+    crop: { x: 316, y: 90, w: 887, h: 865 },
+  },
+  2: {
+    sheet: {
+      src: require("../../../assets/maps sprites/level2 boss tower.png"),
+      w: 1536,
+      h: 1024,
+    },
+    crop: { x: 284, y: 48, w: 957, h: 927 },
+  },
 };
-const TOWER_CROP: Frame = { x: 316, y: 90, w: 887, h: 865 }; // castle's solid bounds
 // Castle box in winding-road-image fractions: just right of the boss coin, centred on it, measured
 // clear of the sandy road.
 const CASTLE_BOX = { left: 0.488, top: 0.8283, width: 0.347 };
 // Node index -> road-image fraction of the curve it sits on (measured from the road centreline).
 const CURVE_FRACS: Record<number, number> = { 1: 0.272, 2: 0.587 };
 
-/** The castle beside the stage-1 boss, positioned in the road image's own coordinates. Decorative. */
+/** The castle beside a stage's boss, positioned in the road image's own coordinates. Decorative. */
 function Castle({
+  tower,
   roadLeft,
   roadWidth,
   roadHeight,
 }: {
+  tower: Tower;
   roadLeft: number;
   roadWidth: number;
   roadHeight: number;
@@ -105,8 +143,8 @@ function Castle({
       importantForAccessibility="no-hide-descendants"
     >
       <Sprite
-        sheet={tower}
-        frame={TOWER_CROP}
+        sheet={tower.sheet}
+        frame={tower.crop}
         width={CASTLE_BOX.width * roadWidth + 10}
       />
     </View>
@@ -154,7 +192,11 @@ export default function MapScreen() {
     return subscribePrep(id, (state) => {
       setPrep(state);
       const mine = ++latest;
-      getPlanBundle(id).then((b) => { if (mine === latest) setBundle(b); }).catch(() => {});
+      getPlanBundle(id)
+        .then((b) => {
+          if (mine === latest) setBundle(b);
+        })
+        .catch(() => {});
     });
   }, [id]);
 
@@ -191,28 +233,35 @@ export default function MapScreen() {
 
   return (
     <Screen background={c.meadow}>
-      {/* Job match, with the back arrow beside the title */}
+      {/* Job match: back arrow in the top-left corner, title centered */}
       <View className="mt-4 gap-2 p-4" style={panel}>
-        <View className="flex-row items-center gap-2">
-          <Pressable
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.replace("/")
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Back to start"
-            hitSlop={8}
-            className="min-h-[44px] min-w-[44px] justify-center"
+        <Pressable
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.replace("/")
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Back to start"
+          hitSlop={8}
+          className="min-h-[44px] min-w-[44px] justify-center"
+          style={{ position: "absolute", top: 0, left: 6, zIndex: 1 }}
+        >
+          <Icon name="arrow-left" size={28} color={c.wood} />
+        </Pressable>
+        {/* Equal side padding keeps the title clear of the arrow and centred on the panel. */}
+        <View className="items-center" style={{ paddingHorizontal: 36 }}>
+          <Text
+            className="text-center"
+            style={font(30)}
+            accessibilityRole="header"
+            numberOfLines={2}
           >
-            <Icon name="arrow-left" size={30} color={c.wood} />
-          </Pressable>
-          <View className="flex-1">
-            <Text style={font(30)} accessibilityRole="header" numberOfLines={2}>
-              {plan.job_title}
+            {plan.job_title}
+          </Text>
+          {plan.company ? (
+            <Text className="text-center" style={font(20, c.dirtEdge)}>
+              {plan.company}
             </Text>
-            {plan.company ? (
-              <Text style={font(20, c.dirtEdge)}>{plan.company}</Text>
-            ) : null}
-          </View>
+          ) : null}
         </View>
         <View className="flex-row items-end justify-between">
           <Text style={font(24)}>Job match</Text>
@@ -357,8 +406,9 @@ function StageSection({
   );
   const locked = stage.levels.every((l) => l.status === "locked");
   const [open, setOpen] = useState(expanded);
-  const hasTower = stageNumber === 1;
-  const height = stage.levels.length * ROW_HEIGHT + (hasTower ? TOWER_ROOM : 0);
+  const tower = TOWERS[stageNumber];
+  // Same height and node layout on every stage (stage 1 is the reference).
+  const height = stage.levels.length * ROW_HEIGHT + TOWER_ROOM;
   const bossIndex = stage.levels.findIndex((l) => l.type === "boss");
   const roadHeight = ROAD_TUCK + height + ROAD_TAIL + STAGE_PAD; // runs through the bottom padding
   const roadWidth = Math.min(width, roadHeight * ROAD_ASPECT);
@@ -366,15 +416,16 @@ function StageSection({
   // x on the road for y (in the road box) as a fraction of the road image's height.
   const roadX = (y: number) =>
     roadLeft + roadWidth * roadCenter((y + ROAD_TUCK) / roadHeight);
-  // Stage 1's boss sits on the road's last curve, levels 2 and 3 on their nearest curves,
+  // The boss sits on the road's last curve, levels 2 and 3 on their nearest curves,
   // anything else is spaced evenly.
   const nodeY = (i: number) =>
-    hasTower && i === bossIndex
+    i === bossIndex
       ? APEX_FRAC * roadHeight - ROAD_TUCK
       : i in CURVE_FRACS
         ? CURVE_FRACS[i] * roadHeight - ROAD_TUCK
         : (i + 0.5) * ROW_HEIGHT;
   const [contentHeight, setContentHeight] = useState(0);
+  const bossIcon = bossIcons[stageNumber - 1] ?? bossIcons[0];
 
   // Run the monkey along the road from the level just passed to the current one (same stage only).
   const { motionOff } = useSettings();
@@ -419,7 +470,7 @@ function StageSection({
 
   return (
     <View
-      className="mt-8 overflow-hidden"
+      className="mt-4 overflow-hidden" // 16px apart, same as the Screen's side margins
       style={{
         borderWidth: STAGE_BORDER,
         borderBottomWidth: STAGE_BORDER * 2,
@@ -437,13 +488,15 @@ function StageSection({
         }}
       />
       <View
-        style={{ padding: STAGE_PAD }}
+        // Collapsed: room under the banner for the arrow that hangs off its bottom edge.
+        style={{
+          padding: STAGE_PAD,
+          paddingBottom: open ? STAGE_PAD : STAGE_PAD + ARROW / 2,
+        }}
         onLayout={(e) => setContentHeight(e.nativeEvent.layout.height)}
       >
         {/* Stage banner: glowing gold panel, monkey on the left edge, boss on the right. */}
-        <Pressable
-          onPress={() => setOpen((o) => !o)}
-          disabled={!beaten}
+        <View
           className="items-center justify-center py-3"
           style={{
             zIndex: 1,
@@ -454,26 +507,26 @@ function StageSection({
             borderColor: c.outline,
             boxShadow: locked ? "none" : "0 0 14px 4px rgba(255,211,77,0.85)",
           }}
-          accessibilityRole={beaten ? "button" : "header"}
-          accessibilityState={{ expanded: open }}
-          accessibilityLabel={`Stage ${stageNumber}: ${stage.title}. Skill: ${skillName}. ${locked ? "Locked" : `${done} of ${stage.levels.length} levels done${beaten ? ", stage beaten" : ""}`}. ${open ? "Expanded" : "Collapsed"}.`}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel={`Stage ${stageNumber}: ${stage.title}. Skill: ${skillName}. ${locked ? "Locked" : `${done} of ${stage.levels.length} levels done${beaten ? ", stage beaten" : ""}`}.`}
         >
           <Image
             source={monkey}
             style={{
               position: "absolute",
-              left: -ICON_SIZE / 3,
+              left: (-ICON_SIZE - 6) / 3,
               width: ICON_SIZE,
               height: ICON_SIZE,
             }}
           />
           <Image
-            source={bossIcon}
+            source={bossIcon.src}
             style={{
               position: "absolute",
-              right: -ICON_SIZE / 3,
-              width: ICON_SIZE,
-              height: ICON_SIZE,
+              right: (-bossIcon.w - 6) / 3,
+              width: bossIcon.w,
+              height: bossIcon.h,
             }}
           />
           <Text className="text-center" style={font(16)}>
@@ -492,7 +545,7 @@ function StageSection({
               {stage.summary}
             </Text>
           ) : null}
-        </Pressable>
+        </View>
 
         {/* Road + nodes: the road runs under the banner at the top and under the bottom border at the end. */}
         {open && (
@@ -508,8 +561,9 @@ function StageSection({
                 height: roadHeight,
               }}
             />
-            {hasTower && bossIndex !== -1 && (
+            {tower && bossIndex !== -1 && (
               <Castle
+                tower={tower}
                 roadLeft={roadLeft}
                 roadWidth={roadWidth}
                 roadHeight={roadHeight}
@@ -583,6 +637,49 @@ function StageSection({
           </View>
         )}
       </View>
+      {/* Not unlocked yet: gray out the whole stage (banner, grass, road, nodes). */}
+      {locked && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: "rgba(90,90,90,0.55)",
+          }}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      )}
+      {/* Open/collapse arrow: bottom-right of the stage, whether collapsed or open. */}
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`${open ? "Collapse" : "Expand"} stage ${stageNumber}`}
+        accessibilityState={{ expanded: open }}
+        className="items-center justify-center"
+        style={{
+          position: "absolute",
+          right: 8,
+          bottom: 8,
+          zIndex: 3,
+          width: ARROW,
+          height: ARROW,
+          backgroundColor: c.wood,
+          borderWidth: 3,
+          borderColor: c.outline,
+          boxShadow: `0 3px 0 ${c.outline}`,
+        }}
+      >
+        <Icon
+          name={open ? "chevron-up" : "chevron-down"}
+          size={26}
+          color={c.cream}
+        />
+      </Pressable>
     </View>
   );
 }

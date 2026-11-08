@@ -1,13 +1,13 @@
 // A level button on the map, drawn from the node sprite sheets: blue = playable, gold = completed,
 // gray = locked. Bosses use the boss coin. The current level gently pulses, with the player monkey beside it.
+import { useSettings } from "@/lib/settings";
+import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
+import type { Level, LevelStatus } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
 } from "react-native-reanimated";
-import { useSettings } from "@/lib/settings";
-import { levelTypeLabel, pixelColors as c } from "@/lib/theme";
-import type { Level, LevelStatus } from "@/lib/types";
 import { Sprite, font, type Frame, type Sheet } from "./pixel";
 
 export const NODE_SIZE = 60;
@@ -19,13 +19,29 @@ const nodeFrames: Record<LevelStatus, Frame> = {
   locked: { x: 856, y: 554, w: 302, h: 284 },
 };
 
-// shortcut: every stage's boss uses the stage-1 coin; switch to "level2 boss node.png" per stage once its layout is mapped.
-const boss: Sheet = { src: require("../../assets/maps sprites/level1 boss node.png"), w: 1536, h: 1024 };
-const bossFrames: Record<LevelStatus, Frame> = {
-  locked: { x: 90, y: 289, w: 400, h: 446 },
-  unlocked: { x: 569, y: 289, w: 400, h: 446 },
-  completed: { x: 1045, y: 289, w: 400, h: 446 },
+type BossCoin = { sheet: Sheet; frames: Record<LevelStatus, Frame> };
+const bossCoins: Record<number, BossCoin> = {
+  1: {
+    sheet: { src: require("../../assets/maps sprites/level1 boss node.png"), w: 1536, h: 1024 },
+    frames: {
+      locked: { x: 90, y: 289, w: 400, h: 446 },
+      unlocked: { x: 569, y: 289, w: 400, h: 446 },
+      completed: { x: 1045, y: 289, w: 400, h: 446 },
+    },
+  },
+  2: {
+    sheet: { src: require("../../assets/maps sprites/level2 boss node.png"), w: 2172, h: 724 },
+    frames: {
+      locked: { x: 97, y: 25, w: 618, h: 666 },
+      unlocked: { x: 778, y: 25, w: 618, h: 666 },
+      completed: { x: 1459, y: 25, w: 618, h: 666 },
+    },
+  },
 };
+// shortcut: stages past 2 reuse the stage-1 coin; add a bossCoins entry when their art exists.
+const bossCoinFor = (stage: number) => bossCoins[stage] ?? bossCoins[1];
+const frameFor = (level: Level, stage: number) =>
+  (level.type === "boss" ? bossCoinFor(stage).frames : nodeFrames)[level.status];
 
 const monkey: Sheet = { src: require("../../assets/level1 monkey idle2.png"), w: 2172, h: 724 };
 // First 3 of the 6 idle2 frames (362px columns); rows trimmed to the character, feet on the same row.
@@ -71,8 +87,8 @@ export function RunningMonkey({ flip, animate }: { flip: boolean; animate: boole
 }
 
 /** Where the standing player's feet are, relative to the node's centre (feet at the coin's middle). */
-export const playerFeetY = (level: Level) => {
-  const f = (level.type === "boss" ? bossFrames : nodeFrames)[level.status];
+export const playerFeetY = (level: Level, stage: number) => {
+  const f = frameFor(level, stage);
   return (f.h * NODE_SIZE) / f.w / 2 - NODE_SIZE / 2;
 };
 
@@ -95,7 +111,7 @@ export function LevelNode({
 
   const locked = level.status === "locked";
   const isBoss = level.type === "boss";
-  const nodeFrame = (isBoss ? bossFrames : nodeFrames)[level.status];
+  const nodeFrame = frameFor(level, stage);
   const nodeHeight = (nodeFrame.h * NODE_SIZE) / nodeFrame.w;
   const stateText = locked ? "locked" : level.status === "completed" ? `completed, best score ${level.best_score ?? 0}%` : "ready to play";
 
@@ -109,7 +125,7 @@ export function LevelNode({
         accessibilityState={{ disabled: locked }}
         hitSlop={8}>
         <Animated.View style={pulse}>
-          <Sprite sheet={isBoss ? boss : nodes} frame={nodeFrame} width={NODE_SIZE} />
+          <Sprite sheet={isBoss ? bossCoinFor(stage).sheet : nodes} frame={nodeFrame} width={NODE_SIZE} />
         </Animated.View>
       </Pressable>
       {isCurrent && (
