@@ -255,20 +255,21 @@ export default function MapScreen() {
     <Screen background={c.meadow}>
       {/* Job match: back arrow in the top-left corner, title centered */}
       <View className="mt-4 gap-2 p-4" style={panel}>
-        <Pressable
-          onPress={() =>
-            router.canGoBack() ? router.back() : router.replace("/")
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Back to start"
-          hitSlop={8}
-          className="min-h-[44px] min-w-[44px] justify-center"
-          style={{ position: "absolute", top: 0, left: 6, zIndex: 1 }}
-        >
-          <Icon name="arrow-left" size={28} color={c.wood} />
-        </Pressable>
         {/* Equal side padding keeps the title clear of the arrow and centred on the panel. */}
         <View className="items-center" style={{ paddingHorizontal: 36 }}>
+          <Pressable
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace("/")
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Back to start"
+            hitSlop={8}
+            className="h-[44px] min-w-[44px] justify-center"
+            // Centre the 44px tap target on the title's first line (font(30) line height = 34.5).
+            style={{ position: "absolute", top: (30 * 1.15 - 44) / 2, left: -2, zIndex: 1 }}
+          >
+            <Icon name="arrow-left" size={28} color={c.wood} />
+          </Pressable>
           <Text
             className="text-center"
             style={font(30)}
