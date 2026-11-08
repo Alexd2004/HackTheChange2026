@@ -102,25 +102,9 @@
           "generated": true
         },
         {
-          "id": "00000000-0000-4000-8000-000000000103",
-          "stage_id": "00000000-0000-4000-8000-000000000021",
-          "idx": 2,
-          "type": "normal",
-          "title": "Counting and grouping",
-          "objective": "Summarize data with groups and counts.",
-          "concepts": [
-            "GROUP BY",
-            "COUNT",
-            "HAVING"
-          ],
-          "status": "locked",
-          "best_score": null,
-          "generated": true
-        },
-        {
           "id": "00000000-0000-4000-8000-000000000104",
           "stage_id": "00000000-0000-4000-8000-000000000021",
-          "idx": 3,
+          "idx": 2,
           "type": "boss",
           "title": "The Query Golem",
           "objective": "Mix every query skill from this stage to beat the boss.",
@@ -178,25 +162,9 @@
           "generated": false
         },
         {
-          "id": "00000000-0000-4000-8000-000000000107",
-          "stage_id": "00000000-0000-4000-8000-000000000022",
-          "idx": 2,
-          "type": "normal",
-          "title": "Request anatomy",
-          "objective": "Headers, bodies and query strings.",
-          "concepts": [
-            "headers",
-            "JSON body",
-            "query params"
-          ],
-          "status": "locked",
-          "best_score": null,
-          "generated": false
-        },
-        {
           "id": "00000000-0000-4000-8000-000000000108",
           "stage_id": "00000000-0000-4000-8000-000000000022",
-          "idx": 3,
+          "idx": 2,
           "type": "boss",
           "title": "The Endpoint Hydra",
           "objective": "Design and debug a small REST API.",
@@ -252,25 +220,9 @@
           "generated": false
         },
         {
-          "id": "00000000-0000-4000-8000-000000000111",
-          "stage_id": "00000000-0000-4000-8000-000000000023",
-          "idx": 2,
-          "type": "normal",
-          "title": "Remotes",
-          "objective": "Push, pull and fetch.",
-          "concepts": [
-            "git push",
-            "git pull",
-            "git fetch"
-          ],
-          "status": "locked",
-          "best_score": null,
-          "generated": false
-        },
-        {
           "id": "00000000-0000-4000-8000-000000000112",
           "stage_id": "00000000-0000-4000-8000-000000000023",
-          "idx": 3,
+          "idx": 2,
           "type": "boss",
           "title": "The Merge Conflict Dragon",
           "objective": "Resolve conflicts and recover from mistakes.",

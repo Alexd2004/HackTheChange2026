@@ -19,12 +19,14 @@ import { QuestionBlank } from "@/components/QuestionBlank";
 import { QuestionMCQ } from "@/components/QuestionMCQ";
 import { ResourceSheet } from "@/components/ResourceSheet";
 import { ErrorState, LoadingState, Screen } from "@/components/ui";
-import { newRunId } from "@/lib/analytics";
+import { newRunId, recordResourceOpen } from "@/lib/analytics";
 import {
   completeLevel,
   generateLevelWithRetry,
   getLevelBundle,
   getPlanBundle,
+  getPlanMatchPct,
+  isPreparing,
   prefetchNextLevel,
   prepareNextStage,
   recordAttempt,
@@ -43,8 +45,8 @@ import {
   xpFor,
 } from "@/lib/grading";
 import { useSettings } from "@/lib/settings";
-import { pixelColors as c } from "@/lib/theme";
-import type { CompleteLevelResultV2, LevelBundle } from "@/lib/types";
+import { pixelColors as c, levelTypeLabel } from "@/lib/theme";
+import type { CompleteLevelResultV2, LevelBundle, LevelType, Question } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -65,6 +67,29 @@ import Animated, {
 } from "react-native-reanimated";
 
 type Phase = "loading" | "generating" | "error" | "playing" | "saving";
+
+/** A finished run waiting to be saved: kept so "Retry" after a failed save re-sends just this. */
+interface PendingResult {
+  levelId: string;
+  planId: string;
+  type: LevelType;
+  score: number; // shown on the result screen
+  savedScore: number; // sent to the server (at least the pass mark with the admin bypass)
+  correct: number;
+  total: number; // questions scored against (a boss win: the ones answered)
+  xp: number;
+  passed: boolean;
+  bypassed: boolean;
+  bossLost: boolean;
+  before: number | null; // Job Match % when the level opened
+}
+
+/** The answer as text for analytics: the chosen option for multiple choice, "" when timed out. */
+function answerText(q: Question, answer: number | string | null): string {
+  if (answer === null) return "";
+  if (typeof answer === "number") return q.options?.[answer] ?? String(answer);
+  return answer;
+}
 
 /** Loads a level, generating its questions first if this is the first time it's opened. */
 async function loadLevel(
@@ -127,6 +152,12 @@ export default function LevelScreen() {
   // (Both are set when the level finishes loading, before any question is shown.)
   const runIdRef = useRef("");
   const questionStartRef = useRef(0);
+  // Set once the player taps the last "Next": blocks a double tap from saving the level twice.
+  const finishingRef = useRef(false);
+  // The finished run while it's being saved; "Retry" after a failed save re-sends it.
+  const pendingRef = useRef<PendingResult | null>(null);
+  // Job Match % when the level opened (the result screen's "before"), read once at load.
+  const beforeRef = useRef<number | null>(null);
 
   const shake = useSharedValue(0);
   const shakeStyle = useAnimatedStyle(() => ({
@@ -151,13 +182,25 @@ export default function LevelScreen() {
           setTimeLeft(challengeSeconds(extendedTime));
           runIdRef.current = newRunId();
           questionStartRef.current = Date.now();
+          finishingRef.current = false;
+          pendingRef.current = null;
           setPhase("playing");
-          // Prefetch the next level's questions in the background.
           // Boss fight started: design the next stage now (it unlocks when this boss is beaten).
           if (b.level.type === "boss") prepareNextStage(b.plan_id, b.stage.idx);
-          getPlanBundle(b.plan_id)
-            .then((pb) => prefetchNextLevel(pb, id))
-            .catch(() => {});
+          // Prefetch the next level's questions in the background (this is what writes a boss while
+          // the level before it is played), and remember the Job Match % for the result screen.
+          // While the background runner is preparing it already covers the next level: just read the %.
+          beforeRef.current = null;
+          if (isPreparing(b.plan_id)) {
+            getPlanMatchPct(b.plan_id).then((m) => { beforeRef.current = m; });
+          } else {
+            getPlanBundle(b.plan_id)
+              .then((pb) => {
+                beforeRef.current = pb.plan.match_pct;
+                prefetchNextLevel(pb, id);
+              })
+              .catch(() => {});
+          }
         },
         (e) => {
           setError(
@@ -175,6 +218,12 @@ export default function LevelScreen() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   const retry = () => {
     setError(null);
+    // A failed save: re-send the finished run instead of restarting the quiz.
+    const pending = pendingRef.current;
+    if (pending) {
+      saveAndShow(pending);
+      return;
+    }
     setPhase("loading");
     fetchLevel();
   };
@@ -194,7 +243,11 @@ export default function LevelScreen() {
       const ok = isCorrect(q, answer);
       setLastCorrect(ok);
       setRevealed(true);
-      recordAttempt(q.id, ok);
+      recordAttempt(q.id, ok, {
+        runId: runIdRef.current,
+        timeMs: Date.now() - questionStartRef.current,
+        answer: answerText(q, answer),
+      });
       if (isBoss) setHit((h) => ({ id: (h?.id ?? 0) + 1, monkeyWins: ok }));
       if (ok) {
         setCorrectCount((c) => c + 1);
@@ -252,47 +305,70 @@ export default function LevelScreen() {
     markNow(questionStartRef);
   }
 
-  async function finish() {
-    if (!bundle) return;
-    const score = scorePct(correctCount, total);
-    const earnedPass = isBoss ? hp === 0 : score >= PASS_PCT;
+  function finish() {
+    if (!bundle || finishingRef.current) return;
+    finishingRef.current = true;
+    const bossWon = isBoss && hp === 0;
+    // A boss fight ends as soon as its HP hits 0, so a win is scored on the questions actually
+    // answered (a flawless win = 100%). A win always means at least 60% of them were hits.
+    const scoredTotal = bossWon ? Math.min(total, qIndex + 1) : total;
+    const score = bossWon
+      ? Math.max(PASS_PCT, scorePct(correctCount, scoredTotal))
+      : scorePct(correctCount, total);
+    const earnedPass = isBoss ? bossWon : score >= PASS_PCT;
     // Admin bypass (EXPO_PUBLIC_ADMIN_BYPASS=1): pass anyway; the server needs at least the pass mark.
     const bypassed = ADMIN_BYPASS && !earnedPass;
     const passed = earnedPass || bypassed;
-    const savedScore = bypassed ? Math.max(score, PASS_PCT) : score;
-    const xp = xpFor(correctCount, type);
+    const pending: PendingResult = {
+      levelId: bundle.level.id,
+      planId: bundle.plan_id,
+      type,
+      score,
+      savedScore: bypassed ? Math.max(score, PASS_PCT) : score,
+      correct: correctCount,
+      total: scoredTotal,
+      xp: xpFor(correctCount, type),
+      passed,
+      bypassed,
+      bossLost: isBoss && !passed,
+      before: beforeRef.current,
+    };
+    pendingRef.current = pending;
+    saveAndShow(pending);
+  }
+
+  /** Saves a passed run (if any), then opens the result screen. On failure the run stays pending. */
+  async function saveAndShow(r: PendingResult) {
     let after: CompleteLevelResultV2 | null = null;
-    const before = await getPlanBundle(bundle.plan_id)
-      .then((p) => p.plan.match_pct)
-      .catch(() => null);
-    if (passed) {
+    if (r.passed) {
       setPhase("saving");
       try {
-        after = await completeLevel(bundle.level.id, savedScore, xp);
+        after = await completeLevel(r.levelId, r.savedScore, r.xp);
       } catch (e) {
         setError(
           e instanceof Error ? e.message : "Couldn't save your progress.",
         );
-        setPhase("error");
+        setPhase("error"); // Retry calls saveAndShow(pendingRef.current) again
         return;
       }
     }
+    pendingRef.current = null;
     router.replace({
       pathname: "/result/[id]",
       params: {
-        id: bundle.level.id,
-        planId: bundle.plan_id,
-        type,
-        score: String(score),
-        correct: String(correctCount),
-        total: String(total),
+        id: r.levelId,
+        planId: r.planId,
+        type: r.type,
+        score: String(r.score),
+        correct: String(r.correct),
+        total: String(r.total),
         // Server decides the XP (0 when replaying without beating your best score).
-        xp: String(passed ? (after?.xp_awarded ?? xp) : 0),
-        passed: passed ? "1" : "0",
-        before: String(before ?? after?.match_pct ?? 0),
-        after: String(after?.match_pct ?? before ?? 0),
-        bossLost: isBoss && !passed ? "1" : "0",
-        bypass: bypassed ? "1" : "0",
+        xp: String(r.passed ? (after?.xp_awarded ?? r.xp) : 0),
+        passed: r.passed ? "1" : "0",
+        before: String(r.before ?? after?.match_pct ?? 0),
+        after: String(after?.match_pct ?? r.before ?? 0),
+        bossLost: r.bossLost ? "1" : "0",
+        bypass: r.bypassed ? "1" : "0",
       },
     });
   }
@@ -348,7 +424,7 @@ export default function LevelScreen() {
     <PixelBackground>
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior="padding" // Android is edge-to-edge: the window no longer resizes for the keyboard
       >
         <ScrollView
           className="flex-1"
@@ -568,6 +644,15 @@ export default function LevelScreen() {
           visible={showResources}
           resources={bundle.resources}
           onClose={() => setShowResources(false)}
+          onOpened={(r, durationMs) =>
+            recordResourceOpen({
+              resource_id: r.id,
+              level_id: bundle.level.id,
+              question_id: q.id,
+              run_id: runIdRef.current,
+              duration_ms: durationMs,
+            })
+          }
         />
       </KeyboardAvoidingView>
     </PixelBackground>

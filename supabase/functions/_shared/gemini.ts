@@ -7,6 +7,11 @@ import { UserError } from "./cors.ts";
 const apiKey = Deno.env.get("GEMINI_API_KEY");
 // Pinned on purpose: a "-latest" alias can change behavior in the middle of the demo.
 const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.1-flash-lite";
+/**
+ * A second model for light, high-volume calls (the answer check). The free tier's daily quota is per
+ * model, so sending those calls to another model spreads the load. Falls back to GEMINI_MODEL.
+ */
+export const lightModel = Deno.env.get("GEMINI_MODEL_LIGHT") || model;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const TIMEOUT_MS = 25_000;
@@ -22,6 +27,8 @@ export interface GeminiOptions {
   thinking?: Thinking; // default "low"
   /** Log the start of an unreadable reply to help debugging. Set false when the reply contains a user's resume. */
   logRaw?: boolean; // default true
+  /** Model for this call only (e.g. `lightModel`). Default GEMINI_MODEL. */
+  model?: string;
 }
 
 export async function callGemini<T>(
@@ -33,13 +40,14 @@ export async function callGemini<T>(
 ): Promise<T> {
   if (!ai) throw new UserError("The AI key isn't set up on the server (GEMINI_API_KEY).", 500);
   const thinking = options.thinking ?? "low";
+  const callModel = options.model || model;
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const started = Date.now();
     try {
       const res = await ai.models.generateContent({
-        model,
+        model: callModel,
         contents: [{ role: "user", parts: [...parts, { text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -59,12 +67,12 @@ export async function callGemini<T>(
         lastError = new Error("unreadable JSON");
         continue; // retry straight away, a fresh sample usually fixes it
       }
-      console.log(`Gemini ok: ${model} thinking=${thinking} ${Date.now() - started}ms (attempt ${attempt})`);
+      console.log(`Gemini ok: ${callModel} thinking=${thinking} ${Date.now() - started}ms (attempt ${attempt})`);
       return parsed;
     } catch (err) {
       lastError = err;
       const status = statusOf(err);
-      console.warn(`Gemini attempt ${attempt} failed after ${Date.now() - started}ms: ${status ?? ""} ${errMessage(err)}`);
+      console.warn(`Gemini (${callModel}) attempt ${attempt} failed after ${Date.now() - started}ms: ${status ?? ""} ${errMessage(err)}`);
       if (!isRetryable(err, status) || attempt === 2) break;
       await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
     }
@@ -104,6 +112,6 @@ function toUserError(err: unknown): UserError {
   if (status === 401 || status === 403 || errMessage(err).includes("API key not valid")) {
     return new UserError("The AI key was rejected by Google. Check GEMINI_API_KEY on the server.", 500);
   }
-  if (status === 404) return new UserError("The AI model name isn't valid. Check GEMINI_MODEL on the server.", 500);
+  if (status === 404) return new UserError("The AI model name isn't valid. Check GEMINI_MODEL (and GEMINI_MODEL_LIGHT) on the server.", 500);
   return new UserError("The AI is busy or returned something unreadable. Please try again.", 502);
 }

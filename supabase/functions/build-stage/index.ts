@@ -1,4 +1,4 @@
-// build-stage: designs one 'pending' stage of a plan (title, summary, 4 levels) in the background,
+// build-stage: designs one 'pending' stage of a plan (title, summary, 3 levels) in the background,
 // after create-plan already showed the map with stage 1.
 // Input { stage_id }   Output { ok: true, status: "ready" | "building" }
 // - Safe to call twice: one call claims the stage ('building'), the other just reports it.

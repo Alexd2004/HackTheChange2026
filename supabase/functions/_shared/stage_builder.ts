@@ -1,12 +1,12 @@
-// Designs ONE stage (its title, summary and 4 levels) with Gemini, and turns it into rows for the
+// Designs ONE stage (its title, summary and 3 levels) with Gemini, and turns it into rows for the
 // levels table. Shared by create-plan (stage 1, right away) and build-stage (the other stages, in
 // the background), so both build stages exactly the same way.
 import { callGemini } from "./gemini.ts";
 import { mapSchema, type MapPlan } from "./schemas.ts";
 import { buildMapPrompt } from "./prompts.ts";
 
-// 3 fundamentals, then level 4 is the boss: a unit test of the three before it.
-export const LEVEL_TYPES = ["normal", "normal", "normal", "boss"] as const;
+// 2 fundamentals, then level 3 is the boss: a unit test of the two before it.
+export const LEVEL_TYPES = ["normal", "normal", "boss"] as const;
 
 export interface StageSkill {
   name: string;

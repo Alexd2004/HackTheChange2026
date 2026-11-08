@@ -7,8 +7,8 @@ import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { type ComponentRef, useCallback, useEffect, useRef, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { AppError, getPlanBundle, revampResume } from "@/lib/api";
 import { getAuthState } from "@/lib/auth";
@@ -41,6 +41,15 @@ export default function RevampScreen() {
   // One action at a time: a ref (not state) so a fast double tap can't start two Gemini calls
   // or open the document picker twice before the screen re-renders.
   const lock = useRef(false);
+  // Keep the email field above the keyboard: once the keyboard is up, scroll to the bottom (the field is there).
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const emailFocused = useRef(false);
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      if (emailFocused.current) scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => sub.remove();
+  }, []);
   const runLocked = useCallback(async (fn: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true;
@@ -145,9 +154,16 @@ export default function RevampScreen() {
     setBusy("share");
     try {
       if (!(await Sharing.isAvailableAsync())) throw new AppError("Sharing isn't available on this device.");
-      await Sharing.shareAsync(namedCopy(pdf.uri, plan?.job_title), {
-        mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: "Save or share your resume",
-      });
+      const options = { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: "Save or share your resume" };
+      const named = namedCopy(pdf.uri, plan?.job_title);
+      try {
+        await Sharing.shareAsync(named, options);
+      } catch (e) {
+        // The renamed copy couldn't be shared (e.g. iOS says "you don't have access to the provided
+        // file"): share the PDF exactly as it was made instead.
+        if (named === pdf.uri) throw e;
+        await Sharing.shareAsync(pdf.uri, options);
+      }
     } catch (e) {
       setError(message(e, "Couldn't open the share sheet."));
     } finally {
@@ -180,7 +196,9 @@ export default function RevampScreen() {
 
   return (
     <PixelBackground>
-      <ScrollView className="flex-1" contentContainerClassName="flex-grow" keyboardShouldPersistTaps="handled">
+      {/* Android apps are edge-to-edge (the window doesn't resize for the keyboard), so pad on both platforms. */}
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
+      <ScrollView ref={scrollRef} className="flex-1" contentContainerClassName="flex-grow" keyboardShouldPersistTaps="handled">
         <View className="w-full max-w-[480px] flex-1 gap-5 self-center px-4 py-8">
           {/* Header */}
           <View className="items-center gap-2">
@@ -274,6 +292,10 @@ export default function RevampScreen() {
                     <TextInput
                       value={email}
                       onChangeText={setEmail}
+                      onFocus={() => { emailFocused.current = true; }}
+                      onBlur={() => { emailFocused.current = false; }}
+                      returnKeyType="send"
+                      onSubmitEditing={() => { if (email.trim() && busy === null) sendEmail(); }}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -316,18 +338,23 @@ export default function RevampScreen() {
           {!locked && <PixelButton label="Back to map" icon="map-outline" variant="secondary" onPress={toMap} />}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </PixelBackground>
   );
 }
 
-/** Copies the PDF to "Resume - <job>.pdf" so the shared file has a readable name (falls back to the original). */
+/**
+ * Copies the PDF to "Resume-<Job-Title>.pdf" so the shared file has a readable name. No spaces or
+ * symbols: a file URL with spaces can fail iOS's "can we read this file?" check in expo-sharing.
+ * Falls back to the original file if the copy fails or doesn't exist afterwards.
+ */
 function namedCopy(uri: string, jobTitle?: string | null): string {
   try {
-    const safe = (jobTitle ?? "").replace(/[^\w\- ]+/g, "").replace(/\s+/g, " ").trim().slice(0, 50);
-    const dest = new File(Paths.cache, `Resume${safe ? ` - ${safe}` : ""}.pdf`);
+    const safe = (jobTitle ?? "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50);
+    const dest = new File(Paths.cache, `Resume${safe ? `-${safe}` : ""}.pdf`);
     if (dest.exists) dest.delete();
     new File(uri).copy(dest);
-    return dest.uri;
+    return dest.exists ? dest.uri : uri;
   } catch {
     return uri;
   }

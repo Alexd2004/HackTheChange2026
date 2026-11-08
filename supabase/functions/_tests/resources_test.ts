@@ -1,36 +1,31 @@
-// Tests for findResources (search, then the AI picks the best links). Keenable and Google are both faked,
-// so there are no API calls and no keys needed.
+// Tests for findResources (search, then plain-code ranking). Keenable is faked and any other network call
+// is counted, so there are no API calls and no keys needed. The ranking must never call Gemini.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 
 Deno.env.set("KEENABLE_API_KEY", "test-key");
-Deno.env.set("GEMINI_API_KEY", "test-key");
-const { findResources } = await import("../_shared/resources.ts");
+const { findResources, rankResources } = await import("../_shared/resources.ts");
 
 const level = { skill: "SQL", title: "Joining tables", objective: "Combine tables.", concepts: ["INNER JOIN", "LEFT JOIN", "ON clause", "NULLs"] };
-const searchResults = Array.from({ length: 8 }, (_, k) => ({
-  title: `Result ${k + 1}`, url: `https://site${k + 1}.example/tutorial`, description: "", snippet: `raw snippet ${k + 1}`,
-}));
+const hit = (title: string, url: string, snippet = "") => ({ title, url, description: "", snippet });
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-const geminiPicks = (picks: { i: number; why: string }[]) =>
-  json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ picks }) }], role: "model" }, finishReason: "STOP" }] });
 
-/** Fake Keenable and Google. Returns what was called. */
+/** Fake Keenable; anything else (e.g. Google) is counted and fails. Returns what was called. */
 async function withFakeWeb(
-  replies: { keenable: (callNumber: number) => Response; gemini: () => Response },
+  keenable: (callNumber: number) => Response,
   fn: () => Promise<void>,
-): Promise<{ keenableUrls: string[]; geminiCalls: number }> {
+): Promise<{ keenableUrls: string[]; otherCalls: number }> {
   const real = globalThis.fetch;
-  const seen = { keenableUrls: [] as string[], geminiCalls: 0 };
+  const seen = { keenableUrls: [] as string[], otherCalls: 0 };
   globalThis.fetch = ((input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url.includes("keenable")) {
       seen.keenableUrls.push(url);
-      return Promise.resolve(replies.keenable(seen.keenableUrls.length - 1));
+      return Promise.resolve(keenable(seen.keenableUrls.length - 1));
     }
-    seen.geminiCalls++;
-    return Promise.resolve(replies.gemini());
+    seen.otherCalls++;
+    return Promise.resolve(json({ error: "no network in tests" }, 500));
   }) as typeof fetch;
   try {
     await fn();
@@ -40,70 +35,100 @@ async function withFakeWeb(
   return seen;
 }
 const opts = { sanitizeOps: false, sanitizeResources: false };
+const queryOf = (url: string) => decodeURIComponent(new URL(url).searchParams.get("query")!);
+// A relevant result on a site with no special ranking.
+const result = (k: number) => hit(`SQL join guide ${k}`, `https://site${k}.example/sql-joins`, `INNER JOIN example ${k}`);
 
-Deno.test({ name: "resources: picks are taken by number, repeats and invented numbers are ignored, max 3", ...opts, fn: async () => {
-  const seen = await withFakeWeb(
-    { keenable: () => json({ results: searchResults }), gemini: () => geminiPicks([
-      { i: 3, why: "Clear join walkthrough" }, { i: 99, why: "invented" }, { i: 3, why: "repeat" },
-      { i: 1, why: "Official docs" }, { i: 5, why: "Good examples" }, { i: 6, why: "fourth pick" },
-    ]) },
-    async () => {
-      const r = await findResources(level);
-      console.log(r.map((x) => `${x.title} -> ${x.snippet}`).join("\n"));
-      assertEquals(r.map((x) => x.url), ["https://site3.example/tutorial", "https://site1.example/tutorial", "https://site5.example/tutorial"]);
-      assertEquals(r.map((x) => x.snippet), ["Clear join walkthrough", "Official docs", "Good examples"]);
-    },
-  );
-  assertEquals(seen.geminiCalls, 1);
+Deno.test({ name: "resources: trusted learning sites rank first, max 3, no AI call", ...opts, fn: async () => {
+  const results = [
+    hit("SQL joins explained", "https://randomblog.example/sql-joins", "INNER JOIN and LEFT JOIN"),
+    hit("SQL INNER JOIN Keyword", "https://www.w3schools.com/sql/sql_join_inner.asp", "The INNER JOIN keyword selects records"),
+    hit("Joins - PostgreSQL docs", "https://www.postgresql.org/docs/current/tutorial-join.html", "Joins between tables, LEFT JOIN"),
+    hit("SQL Joins Tutorial", "https://www.freecodecamp.org/news/sql-joins-tutorial/", "INNER JOIN, LEFT JOIN, ON clause"),
+    hit("Another joins post", "https://another.example/joins", "LEFT JOIN"),
+  ];
+  const seen = await withFakeWeb(() => json({ results }), async () => {
+    const r = await findResources(level);
+    console.log(r.map((x) => `${x.title} -> ${x.url}`).join("\n"));
+    assertEquals(r.map((x) => new URL(x.url).hostname), ["www.postgresql.org", "www.w3schools.com", "www.freecodecamp.org"]);
+    for (const x of r) assert(results.some((c) => c.url === x.url), "every link comes from the search results");
+  });
+  assertEquals(seen.otherCalls, 0, "no Gemini (or any other) call");
   // The search asks for 8 results and uses the skill and the first three concepts.
   assert(seen.keenableUrls[0].includes("max_results=8"));
-  const query = decodeURIComponent(new URL(seen.keenableUrls[0]).searchParams.get("query")!);
-  assertEquals(query, "SQL INNER JOIN LEFT JOIN ON clause tutorial");
+  assertEquals(queryOf(seen.keenableUrls[0]), "SQL INNER JOIN LEFT JOIN ON clause tutorial");
 }});
 
-Deno.test({ name: "resources: if the AI picker fails, the top 3 search results are used", ...opts, fn: async () => {
-  await withFakeWeb(
-    { keenable: () => json({ results: searchResults }), gemini: () => json({ error: { code: 400, message: "bad", status: "ERR" } }, 400) },
-    async () => {
-      const r = await findResources(level);
-      assertEquals(r.map((x) => x.title), ["Result 1", "Result 2", "Result 3"]);
-    },
-  );
-}});
+Deno.test("resources: one link per site", () => {
+  const r = rankResources([
+    hit("SQL INNER JOIN", "https://www.w3schools.com/sql/sql_join_inner.asp", "INNER JOIN"),
+    hit("SQL LEFT JOIN", "https://www.w3schools.com/sql/sql_join_left.asp", "LEFT JOIN"),
+    hit("SQL Joins", "https://www.geeksforgeeks.org/sql-join-set-1-inner-left-right-and-full-joins/", "INNER JOIN, LEFT JOIN"),
+  ], level);
+  assertEquals(r.map((x) => x.url), [
+    "https://www.w3schools.com/sql/sql_join_inner.asp",
+    "https://www.geeksforgeeks.org/sql-join-set-1-inner-left-right-and-full-joins/",
+  ]);
+});
 
-Deno.test({ name: "resources: when the picker says none are good, the level gets none", ...opts, fn: async () => {
-  await withFakeWeb({ keenable: () => json({ results: searchResults }), gemini: () => geminiPicks([]) }, async () => {
+Deno.test("resources: off-topic, social, shopping and sign-up pages are dropped", () => {
+  const r = rankResources([
+    hit("Best pizza in town", "https://pizza.example/menu", "Order online today"),
+    hit("SQL joins pins", "https://www.pinterest.com/pin/123", "SQL join cheat sheet"),
+    hit("SQL Books", "https://www.amazon.com/sql-book/dp/1", "Learn SQL INNER JOIN"),
+    hit("Sign up to learn SQL joins", "https://course.example/signup", "INNER JOIN course"),
+    hit("SQL LEFT JOIN tutorial", "https://tutorial.example/left-join", "How LEFT JOIN keeps unmatched rows"),
+  ], level);
+  assertEquals(r.map((x) => x.url), ["https://tutorial.example/left-join"]);
+});
+
+Deno.test("resources: among unknown sites, more matching concepts ranks higher; ties keep the search order", () => {
+  const r = rankResources([
+    hit("Intro to SQL", "https://a.example/intro", "What is SQL"),
+    hit("SQL joins: INNER JOIN, LEFT JOIN and the ON clause", "https://b.example/joins", ""),
+    hit("SQL basics", "https://c.example/basics", "SQL for beginners"),
+  ], level);
+  assertEquals(r.map((x) => x.url), ["https://b.example/joins", "https://a.example/intro", "https://c.example/basics"]);
+});
+
+Deno.test("resources: paywalled-leaning sites rank below other relevant results", () => {
+  const r = rankResources([
+    hit("SQL joins on Medium", "https://medium.com/@someone/sql-joins", "INNER JOIN LEFT JOIN"),
+    hit("SQL joins guide", "https://guide.example/joins", "INNER JOIN LEFT JOIN"),
+  ], level);
+  assertEquals(r.map((x) => new URL(x.url).hostname), ["guide.example", "medium.com"]);
+});
+
+Deno.test("resources: official-looking docs hosts get a boost, and symbols in skill names still match", () => {
+  const cpp = { skill: "C++", concepts: ["Pointers", "References"] };
+  const r = rankResources([
+    hit("C++ pointers explained", "https://blog.example/cpp-pointers", "C++ pointers"),
+    hit("Pointers", "https://docs.cppreference.example/pointers", "Pointer declaration in C++"),
+    hit("C programming", "https://c.example/intro", "Learn the C language"),
+  ], cpp);
+  assertEquals(r.map((x) => new URL(x.url).hostname), ["docs.cppreference.example", "blog.example"]);
+});
+
+Deno.test({ name: "resources: no search results means no resources and no other calls", ...opts, fn: async () => {
+  const seen = await withFakeWeb(() => json({ results: [] }), async () => {
     assertEquals(await findResources(level), []);
   });
-}});
-
-Deno.test({ name: "resources: no search results means no AI call and no resources", ...opts, fn: async () => {
-  const seen = await withFakeWeb({ keenable: () => json({ results: [] }), gemini: () => geminiPicks([]) }, async () => {
-    assertEquals(await findResources(level), []);
-  });
-  assertEquals(seen.geminiCalls, 0);
+  assertEquals(seen.otherCalls, 0);
 }});
 
 Deno.test({ name: "resources: a Keenable error means no resources, not a crash", ...opts, fn: async () => {
-  const seen = await withFakeWeb({ keenable: () => json({ error: "nope" }, 500), gemini: () => geminiPicks([]) }, async () => {
+  await withFakeWeb(() => json({ error: "nope" }, 500), async () => {
     assertEquals(await findResources(level), []);
   });
-  assertEquals(seen.geminiCalls, 0);
 }});
-
-const queryOf = (url: string) => decodeURIComponent(new URL(url).searchParams.get("query")!);
-const result = (k: number) => ({ title: `Result ${k}`, url: `https://site${k}.example/tutorial`, description: "", snippet: `raw ${k}` });
 
 Deno.test({ name: "resources: fewer than 3 results triggers a second search with a simpler query, merged without repeats", ...opts, fn: async () => {
   const seen = await withFakeWeb(
-    {
-      // first search finds 2, the simpler one finds 5 (one of which is a repeat of the first search)
-      keenable: (n) => json({ results: n === 0 ? [result(1), result(2)] : [result(2), result(3), result(4), result(5), result(6)] }),
-      gemini: () => geminiPicks([{ i: 1, why: "a" }, { i: 3, why: "b" }, { i: 6, why: "c" }]),
-    },
+    // first search finds 2, the simpler one finds 5 (one of which is a repeat of the first search)
+    (n) => json({ results: n === 0 ? [result(1), result(2)] : [result(2), result(3), result(4), result(5), result(6)] }),
     async () => {
       const r = await findResources(level);
-      assertEquals(r.map((x) => x.title), ["Result 1", "Result 3", "Result 6"]);
+      assertEquals(r.map((x) => x.title), ["SQL join guide 1", "SQL join guide 2", "SQL join guide 3"]);
     },
   );
   assertEquals(seen.keenableUrls.length, 2);
@@ -112,23 +137,22 @@ Deno.test({ name: "resources: fewer than 3 results triggers a second search with
 }});
 
 Deno.test({ name: "resources: 3 or more results means no second search", ...opts, fn: async () => {
-  const seen = await withFakeWeb({ keenable: () => json({ results: [result(1), result(2), result(3)] }), gemini: () => geminiPicks([{ i: 1, why: "a" }]) }, async () => {
-    assertEquals((await findResources(level)).length, 1);
+  const seen = await withFakeWeb(() => json({ results: [result(1), result(2), result(3)] }), async () => {
+    assertEquals((await findResources(level)).length, 3);
   });
   assertEquals(seen.keenableUrls.length, 1);
 }});
 
-Deno.test({ name: "resources: both searches empty means no AI call and no resources", ...opts, fn: async () => {
-  const seen = await withFakeWeb({ keenable: () => json({ results: [] }), gemini: () => geminiPicks([]) }, async () => {
+Deno.test({ name: "resources: both searches empty means no resources", ...opts, fn: async () => {
+  const seen = await withFakeWeb(() => json({ results: [] }), async () => {
     assertEquals(await findResources(level), []);
   });
   assertEquals(seen.keenableUrls.length, 2);
-  assertEquals(seen.geminiCalls, 0);
 }});
 
 Deno.test({ name: "resources: a level with one concept doesn't repeat the identical search", ...opts, fn: async () => {
   const oneConcept = { ...level, concepts: ["INNER JOIN"] };
-  const seen = await withFakeWeb({ keenable: () => json({ results: [result(1)] }), gemini: () => geminiPicks([{ i: 1, why: "a" }]) }, async () => {
+  const seen = await withFakeWeb(() => json({ results: [result(1)] }), async () => {
     assertEquals((await findResources(oneConcept)).length, 1);
   });
   assertEquals(seen.keenableUrls.length, 1);

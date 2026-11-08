@@ -71,8 +71,8 @@ export const mapSchema = {
           summary: str,
           levels: {
             type: "array",
-            minItems: 4,
-            maxItems: 4,
+            minItems: 3,
+            maxItems: 3,
             items: {
               type: "object",
               properties: {
@@ -89,26 +89,6 @@ export const mapSchema = {
     },
   },
   required: ["stages"],
-};
-
-// ---- pickResources
-// Picks are by the result's 1-based number, so the model can't invent a link.
-export interface PickedResources {
-  picks: { i: number; why: string }[];
-}
-export const pickSchema = {
-  type: "object",
-  properties: {
-    picks: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { i: { type: "integer", minimum: 1 }, why: str },
-        required: ["i", "why"],
-      },
-    },
-  },
-  required: ["picks"],
 };
 
 // ---- writeQuestions

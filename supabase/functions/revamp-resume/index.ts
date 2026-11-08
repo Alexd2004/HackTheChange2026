@@ -1,6 +1,7 @@
 // revamp-resume: after the user beats stage bosses, rewrites their resume to include the skills they earned.
 // Input  { plan_id, resume: { pdfBase64 } | { text } }   Output RevampedResume (see src/lib/types.ts)
-// Errors { error } with 400 bad input, 404 not your plan, 409 no boss beaten yet, 502 the AI failed.
+// Errors { error } with 400 bad input, 404 not your plan, 409 no boss beaten yet (or no newly earned
+// skill to add, e.g. a review-only plan), 502 the AI failed.
 // The resume is never stored and never logged: it lives on the phone and passes through here once.
 import { handle, json, UserError } from "../_shared/cors.ts";
 import { admin, must, requireUserId } from "../_shared/supabase.ts";
@@ -42,10 +43,17 @@ Deno.serve(handle(async (req) => {
   );
   if (beaten.size === 0) throw new UserError("Beat a stage boss first, then your resume can be updated.", 409);
 
+  // Only beaten GAP stages add skills. Review (polish) stages are skills the resume already shows, so
+  // with nothing new to add there is no point spending an AI call.
+  const rules = classifySkills(skills, beaten);
+  if (rules.allowedNew.length === 0) {
+    throw new UserError("There's nothing new to add to your resume yet. Beat the boss of a skill you're learning first.", 409);
+  }
+
   const revamped = await generateRevamp({
     jobTitle: plan.job_title,
     company: plan.company,
-    rules: classifySkills(skills, beaten),
+    rules,
     pdfBase64: pdf,
     resumeText,
   });

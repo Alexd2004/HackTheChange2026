@@ -11,8 +11,8 @@ export const PASS_PCT = 60;
  */
 export const ADMIN_BYPASS = process.env.EXPO_PUBLIC_ADMIN_BYPASS === "1";
 export const XP_PER_CORRECT = 10;
-// Boss fight: both sides take 3 hits. Boss fights have 3-4 questions, so beating the boss
-// (3 correct) is always at least 75%, above the pass mark. Running out of questions first is a loss.
+// Boss fight: both sides take 3 hits. Boss fights have 6 questions, so beating the boss
+// (3 correct before 3 wrong) takes at most 5 answers: at least 60%, the pass mark.
 export const BOSS_HEARTS = 3;
 export const BOSS_HP = 3;
 

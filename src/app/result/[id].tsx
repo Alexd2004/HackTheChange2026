@@ -87,8 +87,13 @@ export default function ResultScreen() {
     ).catch(() => {});
   }, [passed]);
 
+  // Marked as soon as a pass shows (once per level id), so ANY way back to the map (button,
+  // Android back, swipe) runs the monkey on to the next level.
+  useEffect(() => {
+    if (passed) markLevelFinished(p.id);
+  }, [passed, p.id]);
+
   const toMap = () => {
-    if (passed) markLevelFinished(p.id); // the map runs the monkey on to the next level
     router.dismissTo({ pathname: "/plan/[id]", params: { id: p.planId } });
   };
   const bossWin = p.type === "boss" && passed;
