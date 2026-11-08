@@ -280,7 +280,6 @@ export default function LevelScreen() {
         passed: passed ? "1" : "0",
         before: String(before ?? after?.match_pct ?? 0),
         after: String(after?.match_pct ?? before ?? 0),
-        next: after?.next_level_id ?? "",
         bossLost: isBoss && !passed ? "1" : "0",
       },
     });

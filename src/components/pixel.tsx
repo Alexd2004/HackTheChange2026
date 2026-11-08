@@ -113,13 +113,15 @@ const variants: Record<Variant, { bg: string; border: string; text: string }> = 
 
 /** Chunky button that presses down into its shadow. */
 export function PixelButton({
-  label, onPress, disabled, variant = "primary", icon, hint,
+  label, onPress, disabled, variant = "primary", icon, leading, hint,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   variant?: Variant;
   icon?: IconName;
+  /** Custom art shown in place of `icon` (e.g. a sprite). */
+  leading?: ReactNode;
   hint?: string;
 }) {
   const v = variants[variant];
@@ -143,7 +145,7 @@ export function PixelButton({
             boxShadow: pressed || disabled ? "none" : `0 ${depth}px 0 ${c.outline}`,
             transform: [{ translateY: pressed && !disabled ? depth : 0 }],
           }}>
-          {icon && <Icon name={icon} size={big ? 26 : 22} color={disabled ? c.stoneDark : v.text} />}
+          {leading ?? (icon && <Icon name={icon} size={big ? 26 : 22} color={disabled ? c.stoneDark : v.text} />)}
           <Text style={font(big ? 28 : 22, disabled ? c.stoneDark : v.text)}>{label}</Text>
         </View>
       )}

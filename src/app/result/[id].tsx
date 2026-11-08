@@ -3,13 +3,16 @@ import {
   Icon,
   PixelBackground,
   PixelButton,
+  Sprite,
   TileBar,
   font,
   outlined,
   panel,
+  type Sheet,
 } from "@/components/pixel";
 import { getPlanBundle } from "@/lib/api";
 import { PASS_PCT } from "@/lib/grading";
+import { markLevelFinished } from "@/lib/progress";
 import { isQuestComplete } from "@/lib/resumeDelivery";
 import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
@@ -19,6 +22,13 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, ScrollView, Text, View } from "react-native";
+
+const careerIcon: Sheet = {
+  src: require("../../../assets/Icons and border/career path icon.png"),
+  w: 1536,
+  h: 1024,
+};
+const CAREER_CROP = { x: 354, y: 198, w: 829, h: 654 }; // the scroll's solid bounds
 
 type Params = {
   id: string;
@@ -31,7 +41,6 @@ type Params = {
   passed: string;
   before: string;
   after: string;
-  next: string;
   bossLost: string;
 };
 
@@ -67,8 +76,10 @@ export default function ResultScreen() {
     ).catch(() => {});
   }, [passed]);
 
-  const toMap = () =>
+  const toMap = () => {
+    if (passed) markLevelFinished(p.id); // the map runs the monkey on to the next level
     router.dismissTo({ pathname: "/plan/[id]", params: { id: p.planId } });
+  };
   const bossWin = p.type === "boss" && passed;
 
   // "Quest complete" only when every stage's boss is beaten. No next level can also just mean the
@@ -197,17 +208,7 @@ export default function ResultScreen() {
                 }
               />
             )}
-            {passed && p.next ? (
-              <PixelButton
-                label="Next level"
-                onPress={() =>
-                  router.replace({
-                    pathname: "/level/[id]",
-                    params: { id: p.next },
-                  })
-                }
-              />
-            ) : !passed ? (
+            {!passed && (
               <PixelButton
                 label="Try again"
                 onPress={() =>
@@ -217,11 +218,14 @@ export default function ResultScreen() {
                   })
                 }
               />
-            ) : null}
+            )}
+            {/* After a pass the map is the only way on, so the monkey's run to the next level is seen. */}
             <PixelButton
               label="Back to map"
-              icon="map-outline"
-              variant="secondary"
+              leading={
+                <Sprite sheet={careerIcon} frame={CAREER_CROP} width={34} />
+              }
+              variant={passed ? "primary" : "secondary"}
               onPress={toMap}
             />
           </View>
