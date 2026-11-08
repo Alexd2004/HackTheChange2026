@@ -11,7 +11,10 @@ export const PASS_PCT = 60;
  */
 export const ADMIN_BYPASS = process.env.EXPO_PUBLIC_ADMIN_BYPASS === "1";
 export const XP_PER_CORRECT = 10;
+// Boss fight: both sides take 3 hits. Boss fights have 3-4 questions, so beating the boss
+// (3 correct) is always at least 75%, above the pass mark. Running out of questions first is a loss.
 export const BOSS_HEARTS = 3;
+export const BOSS_HP = 3;
 
 export function normalizeAnswer(s: string): string {
   return s
@@ -55,18 +58,6 @@ export function challengeSeconds(extendedTime: boolean): number {
   return extendedTime ? 40 : 20;
 }
 
-/** Boss HP = correct answers needed to win (60% of the questions, so a win always passes). */
-export function bossMaxHp(questionCount: number): number {
-  return Math.max(1, Math.ceil(questionCount * (PASS_PCT / 100)));
-}
-
-/**
- * Hearts = wrong answers you can afford + 1, so running out of hearts is exactly the moment the boss
- * can no longer be beaten (4 questions: 3 hits needed, 2 hearts). Capped at BOSS_HEARTS.
- */
-export function bossHearts(questionCount: number): number {
-  return Math.max(1, Math.min(BOSS_HEARTS, questionCount - bossMaxHp(questionCount) + 1));
-}
 
 const GENERIC_HINT = "Re-read the question and think about what it is really asking.";
 

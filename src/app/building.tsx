@@ -1,18 +1,45 @@
 // "Building your map…" screen: sends the resume + posting to create-plan, waits until the FIRST
 // level's questions are written, then opens the map. The other levels keep being written one after
 // another in the background (startLevelPrep), so they're ready by the time the player reaches them.
+import {
+  PixelBackground,
+  Sprite,
+  TileBar,
+  outlined,
+  type Sheet,
+} from "@/components/pixel";
+import { ErrorState, Screen } from "@/components/ui";
+import {
+  createPlan,
+  prepareFirstLevel,
+  startLevelPrep,
+  takePendingPlanInput,
+} from "@/lib/api";
+import { saveResume } from "@/lib/resume";
+import { useSettings } from "@/lib/settings";
+import { pixelColors as c } from "@/lib/theme";
+import type { CreatePlanInput } from "@/lib/types";
+import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import { createPlan, prepareFirstLevel, startLevelPrep, takePendingPlanInput } from "@/lib/api";
-import { saveResume } from "@/lib/resume";
-import type { CreatePlanInput } from "@/lib/types";
-import { ErrorState, Screen } from "@/components/ui";
-import { PixelBackground, TileBar, outlined } from "@/components/pixel";
-import { pixelColors as c } from "@/lib/theme";
-import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
 
 const TILES = 10;
+
+/** Running animation speed: milliseconds per frame (lower = faster). */
+const RUN_FRAME_MS = 120;
+const runSheet: Sheet = {
+  src: require("../../assets/monkey running.png"),
+  w: 2172,
+  h: 724,
+};
+const runFrame = (i: number) => ({
+  x: i * 724,
+  y: 30,
+  w: 724,
+  h: 685,
+});
+const RUN_W = (724 * ((370 * 120) / 362)) / 660;
 
 const STEPS = [
   "Reading your resume…",
@@ -65,36 +92,70 @@ export default function BuildingScreen() {
 
   useEffect(() => {
     if (error) return;
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 3500);
+    const t = setInterval(
+      () => setStep((s) => Math.min(s + 1, STEPS.length - 1)),
+      3500,
+    );
     return () => clearInterval(t);
   }, [error]);
 
   const [fontLoaded] = useFonts({ Jersey25_400Regular });
+  const { motionOff } = useSettings();
+  const [runFrameIdx, setRunFrameIdx] = useState(0);
+  useEffect(() => {
+    if (motionOff || error) return; // reduced motion: he stands on frame 0
+    const t = setInterval(
+      () => setRunFrameIdx((f) => (f + 1) % 3),
+      RUN_FRAME_MS,
+    );
+    return () => clearInterval(t);
+  }, [motionOff, error]);
 
   if (error) {
     return (
       <Screen scroll={false}>
-        <ErrorState message={error} onRetry={run} onBack={() => router.replace("/")} />
+        <ErrorState
+          message={error}
+          onRetry={run}
+          onBack={() => router.replace("/")}
+        />
       </Screen>
     );
   }
 
-  const filled = writingFirst ? TILES - 1 : Math.round(((step + 1) / STEPS.length) * (TILES - 2));
+  const filled = writingFirst
+    ? TILES - 1
+    : Math.round(((step + 1) / STEPS.length) * (TILES - 2));
   const message = writingFirst ? "Writing your first level…" : STEPS[step];
 
   return (
     <PixelBackground>
       {fontLoaded && (
         <View className="w-full max-w-[480px] flex-1 items-center justify-center self-center px-6">
-          <Text accessibilityLiveRegion="polite" style={{ ...outlined(32, "#FFFFFF"), textAlign: "center" }}>
+          <View className="mb-4">
+            <Sprite
+              sheet={runSheet}
+              frame={runFrame(runFrameIdx)}
+              width={RUN_W}
+            />
+          </View>
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{ ...outlined(32, "#FFFFFF"), textAlign: "center" }}
+          >
             {message}
           </Text>
 
-          <View className="mt-8 w-full" style={{ boxShadow: `6px 6px 0 ${c.outline}` }}>
+          <View
+            className="mt-8 w-full"
+            style={{ boxShadow: `6px 6px 0 ${c.outline}` }}
+          >
             <TileBar filled={filled} total={TILES} label="Building your map" />
           </View>
 
-          <Text style={{ ...outlined(24), marginTop: 24 }}>This takes about 20 seconds.</Text>
+          <Text style={{ ...outlined(24), marginTop: 24 }}>
+            This takes about 20 seconds.
+          </Text>
         </View>
       )}
     </PixelBackground>
