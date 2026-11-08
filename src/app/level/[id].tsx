@@ -28,6 +28,7 @@ import {
   prepareNextStage,
   recordAttempt,
 } from "@/lib/api";
+import { levelTitle } from "@/lib/bosses";
 import {
   ADMIN_BYPASS,
   BOSS_HEARTS,
@@ -380,7 +381,7 @@ export default function LevelScreen() {
               style={outlined(34, c.gold)}
               accessibilityRole="header"
             >
-              {bundle.level.title}
+              {levelTitle(bundle.level, bundle.stage.idx)}
             </Text>
             <Text style={outlined(24)}>
               Question {qIndex + 1} of {total} · {bundle.skill.name}
