@@ -45,10 +45,27 @@ const dots: [number, number, string][] = [
   [88, 62, c.grassDark],
   [14, 80, "#F6A6D8"],
   [78, 88, "#FFFFFF"],
+  [40, 4, c.grassDark],
+  [62, 20, "#FFFFFF"],
+  [24, 44, "#F6A6D8"],
+  [94, 32, c.grassDark],
+  [26, 94, "#FFFFFF"],
+  [2, 70, c.grassDark],
+  [92, 76, "#F6A6D8"],
+  [52, 94, c.grassDark],
 ];
 
-/** Grass background with pixel flowers. */
-export function PixelBackground({ children }: { children: ReactNode }) {
+// One tuft centered on a 1536×1024 canvas; the frame crops to the tuft plus its glow.
+const grassSheet: Sheet = { src: require("../../assets/maps sprites/extra grass.png"), w: 1536, h: 1024 };
+const tuft: Frame = { x: 520, y: 340, w: 500, h: 350 };
+// Scattered tufts: [left %, top %, width px]. Kept to the edges so they don't crowd the content.
+const tufts: [number, number, number][] = [
+  [4, 4, 56], [70, 6, 44], [30, 16, 36], [86, 24, 52], [2, 40, 44],
+  [84, 48, 40], [8, 66, 52], [74, 72, 56], [36, 88, 44], [88, 90, 36],
+];
+
+/** Grass background with pixel flowers; `grass` adds sprite tufts (landing + upload share it so the hand-off is seamless). */
+export function PixelBackground({ children, grass }: { children: ReactNode; grass?: boolean }) {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.grass }} edges={["top", "bottom"]}>
       <View
@@ -63,6 +80,12 @@ export function PixelBackground({ children }: { children: ReactNode }) {
             style={{ left: `${l}%`, top: `${t}%`, backgroundColor: color }}
           />
         ))}
+        {grass &&
+          tufts.map(([l, t, w], i) => (
+            <View key={`t${i}`} style={{ position: "absolute", left: `${l}%`, top: `${t}%` }}>
+              <Sprite sheet={grassSheet} frame={tuft} width={w} />
+            </View>
+          ))}
       </View>
       {children}
     </SafeAreaView>
