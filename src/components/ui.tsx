@@ -5,10 +5,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/lib/theme";
 
 /** Full-height dark screen, safe-area aware, content capped at phone width on big screens. */
-export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+export function Screen({
+  children, scroll = true, background,
+}: { children: ReactNode; scroll?: boolean; background?: string }) {
   const inner = <View className="w-full max-w-[480px] self-center flex-1 px-4">{children}</View>;
   return (
-    <SafeAreaView className="flex-1 bg-ink" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-ink" style={background ? { backgroundColor: background } : undefined} edges={["top", "bottom"]}>
       {scroll ? (
         <ScrollView
           className="flex-1"
