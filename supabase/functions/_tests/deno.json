@@ -2,6 +2,7 @@
   "tasks": {
     "test": "deno test --allow-read --allow-env --allow-net shuffle_test.ts stage_skills_test.ts gemini_test.ts resources_test.ts revamp_test.ts resume_store_test.ts",
     "live": "deno test --allow-read --allow-env --allow-net --env-file=../.env keenable_live_test.ts fit_live_test.ts map_live_test.ts shuffle_live_test.ts question_quality_live_test.ts resources_live_test.ts revamp_live_test.ts",
-    "check": "DENO_NO_PACKAGE_JSON=1 deno check ../create-plan/index.ts ../generate-level/index.ts ../revamp-resume/index.ts"
+    "check": "DENO_NO_PACKAGE_JSON=1 deno check ../create-plan/index.ts ../generate-level/index.ts ../revamp-resume/index.ts",
+    "tune": "deno run --allow-read --allow-env --allow-net --env-file=../.env tuning_report.ts"
   }
 }

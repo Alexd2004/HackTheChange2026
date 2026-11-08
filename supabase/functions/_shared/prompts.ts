@@ -55,6 +55,7 @@ ${mode === "polish"
   : ""}
 Each stage has exactly 7 levels in this order:
 - levels 1 to 6 (type normal): the fundamentals of the skill, ordered from the very basics up to the more advanced ideas.
+  Level 1 starts at the very beginning: what the skill is and why it is used, with no jargon assumed.
   Each level teaches NEW concepts that the earlier levels did not.
 - level 7 (boss): a final exam for the stage. It is NOT about testing code. It re-tests what levels 1 to 6 taught,
   set in a realistic on-the-job scenario. Its concepts must be concept names (not level titles) picked from levels 1 to 6, with no new topics.
@@ -65,7 +66,7 @@ Stage title: max 4 words, game-like. Summary: one sentence.`;
 const typeRules = {
   normal: "5 questions testing the basics of the concepts. Friendly, clear.",
   challenge: "6 harder questions that need applying the concepts, not just recalling them.",
-  boss: "8 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Together the questions must include at least one concept from EVERY earlier level, and each question should mix two concepts where it makes sense.",
+  boss: "8 scenario questions set at a real job. This level is the final exam for the whole stage. Only test concepts the earlier levels listed below taught, never new topics. Write the first six questions one per earlier level, in order (question 1 tests a concept from the first earlier level listed, question 2 from the second, and so on up to question 6). Make the last two questions mix concepts from two different levels. In every question, set \"concept\" to one concept name taken from the list after that level's title (for example \"LEFT JOIN\", not \"Joining tables\"), never to the level's title itself.",
 } as const;
 
 /** Early levels are gentle and later ones harder, so the six fundamentals levels build up to the boss. */

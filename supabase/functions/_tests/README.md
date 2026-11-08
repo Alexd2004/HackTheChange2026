@@ -13,7 +13,8 @@ From the project root:
 cd supabase/functions/_tests
 deno task test      # offline: no API keys, no network calls to Google, takes a few seconds
 deno task live      # live: calls the real Gemini and Keenable APIs, takes about 40 seconds
-deno task check     # type-checks the create-plan and generate-level functions
+deno task check     # type-checks the create-plan, generate-level and revamp-resume functions
+deno task tune      # timing + quality report on the full pipeline for 3 sample pairs (about 5 minutes; add -- --pair=2 for one pair)
 ```
 
 The first run downloads dependencies, so it is slower.
@@ -56,3 +57,11 @@ The samples in `samples/` are made-up people and postings, not real data.
   `$env:GEMINI_MODEL = "gemini-3.5-flash-lite"; deno task live`
 - If Google keeps returning `503 high demand` for your model, that is Google being busy, not a code bug.
   Try another model name from AI Studio.
+
+## Tuning report (`deno task tune`)
+
+Runs the real create-plan and generate-level pipelines (no database) for three made-up resume and posting pairs and
+prints timings against the targets (create-plan under 20 s, a level under 15 s). It flags vague concepts, more than 3
+stages, levels that are not 7 per stage, concept names not on the level's list, long explanations, a flat difficulty
+ramp, missing resources, and a boss that skips earlier levels. It paces itself under the 15 requests/minute free limit,
+so the pauses it prints are normal. Occasional slow levels (20 s or more) are Google latency spikes, not a code problem.
