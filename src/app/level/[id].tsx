@@ -18,7 +18,7 @@ import {
 import { QuestionBlank } from "@/components/QuestionBlank";
 import { QuestionMCQ } from "@/components/QuestionMCQ";
 import { ResourceSheet } from "@/components/ResourceSheet";
-import { ErrorState, LoadingState, Screen } from "@/components/ui";
+import { ErrorState, Screen } from "@/components/ui";
 import { newRunId, recordResourceOpen } from "@/lib/analytics";
 import {
   completeLevel,
@@ -57,6 +57,7 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -110,6 +111,31 @@ async function loadLevel(
   if (b.questions.length === 0)
     throw new Error("This level has no questions yet. Please try again.");
   return b;
+}
+
+/**
+ * Pixel-themed loader. The text waits `delayMs` before appearing, so a quick load shows only the
+ * grass background (a seamless hand-off into the level) instead of flashing a message.
+ */
+function PixelLoading({ message, delayMs = 0, fontReady }: { message: string; delayMs?: number; fontReady: boolean }) {
+  const [show, setShow] = useState(delayMs === 0);
+  useEffect(() => {
+    if (delayMs === 0) return;
+    const t = setTimeout(() => setShow(true), delayMs);
+    return () => clearTimeout(t);
+  }, [delayMs]);
+  return (
+    <PixelBackground>
+      {show && fontReady && (
+        <View className="flex-1 items-center justify-center gap-6 px-6" accessibilityLiveRegion="polite">
+          <View style={{ ...panel, paddingHorizontal: 24, paddingVertical: 20, alignItems: "center", gap: 14 }}>
+            <ActivityIndicator size="large" color={c.wood} />
+            <Text style={{ ...font(30), textAlign: "center" }}>{message}</Text>
+          </View>
+        </View>
+      )}
+    </PixelBackground>
+  );
 }
 
 /** Stores the current time in a ref (outside the component so it isn't treated as render code). */
@@ -398,24 +424,10 @@ export default function LevelScreen() {
       </Screen>
     );
   }
-  if (phase === "loading")
-    return (
-      <Screen>
-        <LoadingState message="Loading level…" />
-      </Screen>
-    );
   if (phase === "generating")
-    return (
-      <Screen>
-        <LoadingState message="Writing your questions… (about 10 seconds)" />
-      </Screen>
-    );
-  if (!bundle || !q)
-    return (
-      <Screen>
-        <LoadingState message="Loading level…" />
-      </Screen>
-    );
+    return <PixelLoading message={"Writing your questions…\n(about 10 seconds)"} fontReady={fontLoaded} />;
+  if (phase === "loading" || !bundle || !q)
+    return <PixelLoading message="Loading level…" delayMs={400} fontReady={fontLoaded} />;
 
   const canAnswer =
     q.kind === "mcq" ? selected !== null : typed.trim().length > 0;
