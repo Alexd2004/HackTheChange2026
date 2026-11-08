@@ -30,6 +30,16 @@ const careerIcon: Sheet = {
 };
 const CAREER_CROP = { x: 354, y: 198, w: 829, h: 654 }; // the scroll's solid bounds
 
+/** Dance animation speed: milliseconds per frame (lower = faster). */
+const DANCE_FRAME_MS = 160;
+// 8 frames of ~271.5×724 in one row, feet on one baseline (y≈535). The crop trims the empty space
+// (art spans y≈189-535).
+const DANCE_FRAMES = 8;
+const danceSheet: Sheet = { src: require("../../../assets/monkeygangnam.png"), w: 2172, h: 724 };
+const danceFrame = (i: number) => ({ x: Math.round(i * 271.5), y: 180, w: 271, h: 365 });
+// Same on-screen height as the landing monkey (~123px); the dance art is ~346 sheet px tall.
+const DANCE_W = (271 * 123) / 346;
+
 type Params = {
   id: string;
   planId: string;
@@ -112,6 +122,14 @@ export default function ResultScreen() {
         ? "The boss won this round"
         : "Almost there";
   const icon = bossWin ? "trophy" : passed ? "star" : "arm-flex";
+  const dancing = passed && !bossWin; // "Level complete!": the dancing monkey replaces the star box
+
+  const [danceIdx, setDanceIdx] = useState(0);
+  useEffect(() => {
+    if (!dancing || motionOff) return; // reduced motion: he holds frame 0
+    const t = setInterval(() => setDanceIdx((f) => (f + 1) % DANCE_FRAMES), DANCE_FRAME_MS);
+    return () => clearInterval(t);
+  }, [dancing, motionOff]);
 
   if (!fontLoaded) return <PixelBackground>{null}</PixelBackground>;
 
@@ -125,16 +143,20 @@ export default function ResultScreen() {
             accessibilityRole="header"
             accessibilityLabel={`${title}. Score ${p.score} percent, ${p.correct} of ${p.total} correct.`}
           >
-            <View
-              className="h-24 w-24 items-center justify-center"
-              style={{ ...panel, backgroundColor: c.cream }}
-            >
-              <Icon
-                name={icon}
-                size={60}
-                color={bossWin ? c.red : passed ? c.gold : c.wood}
-              />
-            </View>
+            {dancing ? (
+              <Sprite sheet={danceSheet} frame={danceFrame(danceIdx)} width={DANCE_W} />
+            ) : (
+              <View
+                className="h-24 w-24 items-center justify-center"
+                style={{ ...panel, backgroundColor: c.cream }}
+              >
+                <Icon
+                  name={icon}
+                  size={60}
+                  color={bossWin ? c.red : passed ? c.gold : c.wood}
+                />
+              </View>
+            )}
             <Text className="mt-2 text-center" style={outlined(44, c.gold)}>
               {title}
             </Text>
