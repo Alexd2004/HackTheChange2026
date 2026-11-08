@@ -1,9 +1,14 @@
 // Upload screen: add a resume (PDF or pasted text) + paste a job posting → build the map.
 // Also: continue an existing plan and load the demo plan. Pixel theme shared with the landing.
 import { Landing } from "@/components/Landing";
-import { field, font } from "@/components/pixel";
+import {
+  field,
+  font,
+  PixelBackground,
+  Sprite,
+  type Sheet,
+} from "@/components/pixel";
 import { ProgressHeader } from "@/components/ProgressHeader";
-import { getProfile } from "@/lib/auth";
 import {
   AppError,
   importDemoPlan,
@@ -11,6 +16,8 @@ import {
   setPendingPlanInput,
   USE_MOCK,
 } from "@/lib/api";
+import { getProfile } from "@/lib/auth";
+import { useSettings } from "@/lib/settings";
 import { pixelColors as c } from "@/lib/theme";
 import type { Plan } from "@/lib/types";
 import { Jersey25_400Regular, useFonts } from "@expo-google-fonts/jersey-25";
@@ -29,7 +36,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 let landingSeen = false; // module-level: show the landing once per app session, not on every return to "/"
 
@@ -41,9 +48,27 @@ interface PickedPdf {
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
+// 3 frames of 724×724 (peek, duck, hat only), paws on one baseline at y≈644. Crop trims empty space.
+const peekSheet: Sheet = {
+  src: require("../../assets/monkey peak.png"),
+  w: 2172,
+  h: 724,
+};
+const peekFrame = (i: number) => ({ x: i * 724 + 70, y: 100, w: 600, h: 560 });
+const PEEK_W = 96;
+// Sprite px above the panel's inner top edge: puts the panel border across the middle of the paws.
+const PEEK_HANG = 80;
+
 export default function UploadScreen() {
   const [fontLoaded] = useFonts({ Jersey25_400Regular });
   const [started, setStarted] = useState(landingSeen);
+  const [fromLanding] = useState(!landingSeen); // fade the form in only right after the landing, not on every return to "/"
+  const { motionOff } = useSettings();
+  // Rows fade in one after another, top to bottom.
+  const rowIn = (row: number) =>
+    fromLanding && !motionOff
+      ? FadeIn.duration(250).delay(row * 120)
+      : undefined;
   const [mode, setMode] = useState<ResumeMode>("pdf");
   const [pdf, setPdf] = useState<PickedPdf | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -66,8 +91,12 @@ export default function UploadScreen() {
     set(t);
   };
 
+  // Peeking monkey on the form panel: frame index, or null once he has ducked away.
+  const [peek, setPeek] = useState<number | null>(0);
+
   useFocusEffect(
     useCallback(() => {
+      setPeek(0); // back on this screen: he's peeking again
       listPlans()
         .then(setPlans)
         .catch(() => setPlans([]));
@@ -133,7 +162,7 @@ export default function UploadScreen() {
   }
 
   function build() {
-    if (!canBuild) return;
+    if (!canBuild || peek !== 0) return; // peek !== 0: already leaving, ignore repeat taps
     setPendingPlanInput({
       resume:
         mode === "pdf" && pdf
@@ -141,7 +170,14 @@ export default function UploadScreen() {
           : { text: resumeText.trim() },
       posting: posting.trim(),
     });
-    router.push("/building");
+    // The monkey ducks behind the panel (frames 1→3), vanishes, then we leave.
+    const step = motionOff || continuePlan ? 0 : 150; // no monkey shown for returning users: nothing to wait for
+    setPeek(1);
+    setTimeout(() => setPeek(2), step);
+    setTimeout(() => {
+      setPeek(null);
+      router.push("/building");
+    }, step * 2);
   }
 
   async function loadDemo() {
@@ -157,308 +193,344 @@ export default function UploadScreen() {
     }
   }
 
-  if (!started)
-    return (
-      <Landing
-        onContinue={() => {
-          landingSeen = true;
-          setStarted(true);
-        }}
-      />
-    );
-
+  // One background for landing and form: it stays mounted so the terrain doesn't flicker at the hand-off.
   return (
     <KeyboardAvoidingView
       className="flex-1"
       style={{ backgroundColor: c.grass }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
-        {fontLoaded && (
-          <View className="w-full max-w-[480px] flex-1 self-center px-4 pb-3 pt-3">
-            {!typing && <ProgressHeader />}
-            <View className="mt-3 flex-row items-end justify-between">
-              <Text
-                accessibilityRole="header"
-                style={{
-                  ...font(44, c.gold),
-                  textShadowColor: c.outline,
-                  textShadowOffset: { width: 3, height: 3 },
-                  textShadowRadius: 0,
-                }}
-              >
-                SkillQuest
-              </Text>
-              {typing ? (
-                <Pressable
-                  onPress={Keyboard.dismiss}
-                  accessibilityRole="button"
-                  accessibilityLabel="Done typing"
-                  accessibilityHint="Closes the keyboard"
-                  className="min-h-[44px] justify-center px-4 active:opacity-80"
-                  style={{
-                    backgroundColor: c.gold,
-                    borderWidth: 3,
-                    borderColor: c.outline,
-                  }}
-                >
-                  <Text style={font(22, c.outline)}>Done</Text>
-                </Pressable>
-              ) : (
-                USE_MOCK && (
-                  <Text style={{ ...font(16, c.cream), marginBottom: 6 }}>
-                    Mock mode
-                  </Text>
-                )
-              )}
-            </View>
-
-            {continuePlan && (
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/plan/[id]",
-                    params: { id: continuePlan.id },
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`Continue your plan for ${continuePlan.job_title}, ${continuePlan.match_pct}% match`}
-                className="mt-4 flex-row items-center justify-between px-3 py-2 active:opacity-80"
-                style={{
-                  backgroundColor: c.parchment,
-                  borderWidth: 3,
-                  borderColor: c.wood,
-                  boxShadow: `5px 5px 0 ${c.outline}`,
-                }}
-              >
-                <Text
-                  numberOfLines={1}
-                  className="flex-1 pr-3"
-                  style={font(20)}
-                >
-                  Continue: {continuePlan.job_title}
-                </Text>
-                <Text style={font(24, c.grassDark)}>{continuePlan.match_pct}%</Text>
-              </Pressable>
-            )}
-
-            {/* Form panel: hugs its content; while typing it fills the screen so the focused field can expand */}
-            <View
-              className={`mt-6 gap-2 p-3 ${typing ? "flex-1" : ""}`}
-              style={{
-                backgroundColor: c.parchment,
-                borderWidth: 4,
-                borderColor: c.wood,
-                boxShadow: `5px 5px 0 ${c.outline}`,
-              }}
-            >
-              {focused !== "posting" && (
-                <>
-                  <View className="min-h-[44px] flex-row items-center justify-between">
-                    <Text style={font(24)} accessibilityRole="header">
-                      1. Your resume
-                    </Text>
-                    {mode === "text" && !typing && (
-                      <PasteButton
-                        label="Paste resume"
-                        onPress={() => pasteInto(setResumeText)}
-                      />
-                    )}
-                  </View>
-                  {!typing && (
-                    <View
-                      className="flex-row"
-                      style={{ borderWidth: 2, borderColor: c.wood }}
-                      accessibilityRole="tablist"
-                    >
-                      {(["pdf", "text"] as const).map((m) => (
-                        <Pressable
-                          key={m}
-                          onPress={() => setMode(m)}
-                          accessibilityRole="tab"
-                          accessibilityState={{ selected: mode === m }}
-                          className="min-h-[44px] flex-1 items-center justify-center"
-                          style={{
-                            backgroundColor: mode === m ? c.wood : c.cream,
-                          }}
-                        >
-                          <Text style={font(20, mode === m ? c.cream : c.wood)}>
-                            {m === "pdf" ? "Upload PDF" : "Paste text"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-
-                  {mode === "pdf" ? (
-                    <Pressable
-                      onPress={pickPdf}
-                      disabled={picking}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        pdf
-                          ? `Resume selected: ${pdf.name}. Tap to choose a different file.`
-                          : "Choose your resume PDF"
-                      }
-                      className="h-24 flex-row items-center gap-3 px-4 active:opacity-80"
-                      style={{
-                        ...field,
-                        borderStyle: pdf ? "solid" : "dashed",
-                        backgroundColor: pdf ? "#E6F2D9" : c.cream,
-                      }}
-                    >
-                      <MaterialCommunityIcons
-                        name={
-                          pdf ? "file-check-outline" : "file-upload-outline"
-                        }
-                        size={44}
-                        color={pdf ? c.grassDark : c.wood}
-                      />
-                      <View className="flex-1">
-                        <Text numberOfLines={1} style={font(22)}>
-                          {picking
-                            ? "Opening…"
-                            : pdf
-                              ? pdf.name
-                              : "Choose a PDF"}
-                        </Text>
-                        <Text style={font(18, c.stoneDark)}>
-                          {pdf ? "Tap to change" : "Up to 5 MB"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  ) : (
-                    <TextInput
-                      value={resumeText}
-                      onChangeText={typed(setResumeText)}
-                      {...focusProps("resume")}
-                      multiline
-                      textAlignVertical="top"
-                      placeholder="Paste your resume text here"
-                      placeholderTextColor={c.stoneDark}
-                      accessibilityLabel="Resume text"
-                      className={`${focused === "resume" ? "flex-1" : "h-24"} p-3`}
-                      style={{ ...field, ...font(20) }}
-                    />
-                  )}
-                </>
-              )}
-
-              {focused !== "resume" && (
-                <>
-                  <View className="mt-2 flex-row items-center justify-between">
-                    <Text style={font(24)} accessibilityRole="header">
-                      2. The job posting
-                    </Text>
-                    {!typing && (
-                      <PasteButton
-                        label="Paste job posting"
-                        onPress={() => pasteInto(setPosting)}
-                      />
-                    )}
-                  </View>
-                  <TextInput
-                    value={posting}
-                    onChangeText={typed(setPosting)}
-                    {...focusProps("posting")}
-                    multiline
-                    textAlignVertical="top"
-                    placeholder="Paste the full job description"
-                    placeholderTextColor={c.stoneDark}
-                    accessibilityLabel="Job posting text"
-                    className={`${focused === "posting" ? "flex-1" : "h-24"} p-3`}
-                    style={{ ...field, ...font(20) }}
-                  />
-                </>
-              )}
-              {!typing && (
-                <Text style={font(16, c.stoneDark)}>
-                  Your resume stays on your phone. It’s sent to Google’s Gemini AI to read it, and we only save your skills.
-                </Text>
-              )}
-            </View>
-
-            {error && (
-              <View
-                className="mt-3 p-3"
-                style={{
-                  backgroundColor: c.cream,
-                  borderWidth: 3,
-                  borderColor: c.red,
-                }}
-                accessibilityRole="alert"
-              >
-                <Text style={font(20, c.red)}>{error}</Text>
-              </View>
-            )}
-
-            {!typing && (
-              <>
-                <Pressable
-                  onPress={build}
-                  disabled={!canBuild}
-                  accessibilityRole="button"
-                  accessibilityLabel="Build my map"
-                  accessibilityHint="Analyzes your resume and the posting, then builds your levels"
-                  accessibilityState={{ disabled: !canBuild }}
-                  className="mt-8"
-                >
-                  {({ pressed }) => (
-                    <View
-                      className="min-h-[56px] items-center justify-center"
-                      style={{
-                        backgroundColor: canBuild ? c.gold : c.stone,
-                        borderWidth: 4,
-                        borderColor: canBuild ? c.outline : c.stoneDark,
-                        boxShadow:
-                          pressed || !canBuild
-                            ? "none"
-                            : `0 5px 0 ${c.outline}`,
-                        transform: [
-                          { translateY: pressed && canBuild ? 5 : 0 },
-                        ],
-                      }}
-                    >
-                      <Text
-                        style={font(28, canBuild ? c.outline : c.stoneDark)}
-                      >
-                        Build my map
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-                {!canBuild && (
-                  <Text className="mt-6 text-center" style={font(18, c.cream)}>
-                    {!resumeReady
-                      ? mode === "pdf"
-                        ? "Add your resume PDF"
-                        : "Paste at least a few lines of your resume"
-                      : "Paste the full job posting"}{" "}
-                    to continue.
-                  </Text>
-                )}
-                <Pressable
-                  onPress={loadDemo}
-                  disabled={demoLoading}
-                  accessibilityRole="button"
-                  accessibilityLabel="Try the demo plan"
-                  accessibilityState={{ busy: demoLoading }}
-                  className="mt-4 min-h-[44px] items-center justify-center active:opacity-70"
-                >
+      <PixelBackground grass>
+        {!started ? (
+          <Landing
+            onContinue={() => {
+              landingSeen = true;
+              setStarted(true);
+            }}
+          />
+        ) : (
+          fontLoaded && (
+            <View className="w-full max-w-[480px] flex-1 self-center px-4 pb-3 pt-3">
+              <Animated.View entering={rowIn(1)}>
+                <View className="mt-3 flex-row items-end justify-between">
                   <Text
+                    accessibilityRole="header"
                     style={{
-                      ...font(20, c.cream),
-                      textDecorationLine: "underline",
+                      ...font(44, c.gold),
+                      textShadowColor: c.outline,
+                      textShadowOffset: { width: 3, height: 3 },
+                      textShadowRadius: 0,
                     }}
                   >
-                    {demoLoading ? "Loading demo…" : "Try the demo plan"}
+                    SkillQuest
                   </Text>
-                </Pressable>
-              </>
-            )}
-          </View>
+                  {typing ? (
+                    <Pressable
+                      onPress={Keyboard.dismiss}
+                      accessibilityRole="button"
+                      accessibilityLabel="Done typing"
+                      accessibilityHint="Closes the keyboard"
+                      className="min-h-[44px] justify-center px-4 active:opacity-80"
+                      style={{
+                        backgroundColor: c.gold,
+                        borderWidth: 3,
+                        borderColor: c.outline,
+                      }}
+                    >
+                      <Text style={font(22, c.outline)}>Done</Text>
+                    </Pressable>
+                  ) : (
+                    USE_MOCK && (
+                      <Text style={{ ...font(16, c.cream), marginBottom: 6 }}>
+                        Mock mode
+                      </Text>
+                    )
+                  )}
+                </View>
+              </Animated.View>
+
+              {continuePlan && (
+                <Animated.View entering={rowIn(2)}>
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/plan/[id]",
+                        params: { id: continuePlan.id },
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Continue your plan for ${continuePlan.job_title}, ${continuePlan.match_pct}% match`}
+                    className="mt-4 flex-row items-center justify-between px-3 py-2 active:opacity-80"
+                    style={{
+                      backgroundColor: c.parchment,
+                      borderWidth: 3,
+                      borderColor: c.wood,
+                      boxShadow: `5px 5px 0 ${c.outline}`,
+                    }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      className="flex-1 pr-3"
+                      style={font(20)}
+                    >
+                      Continue: {continuePlan.job_title}
+                    </Text>
+                    <Text style={font(24, c.grassDark)}>
+                      {continuePlan.match_pct}%
+                    </Text>
+                  </Pressable>
+                </Animated.View>
+              )}
+
+              {/* Form panel: hugs its content; while typing it fills the screen so the focused field can expand */}
+              <Animated.View
+                entering={rowIn(continuePlan ? 3 : 2)}
+                style={typing ? { flex: 1 } : undefined}
+              >
+                <View
+                  className={`mt-6 gap-2 p-3 ${typing ? "flex-1" : ""}`}
+                  style={{
+                    backgroundColor: c.parchment,
+                    borderWidth: 4,
+                    borderColor: c.wood,
+                    boxShadow: `5px 5px 0 ${c.outline}`,
+                  }}
+                >
+                  {/* Paws hang over the top border so he looks like he's holding on; hidden while typing (the Done button sits there)
+                      and for returning users, whose Continue card sits above the panel. */}
+                  {peek !== null && !typing && !continuePlan && (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        right: 8,
+                        top: -PEEK_HANG,
+                        zIndex: 1,
+                      }}
+                    >
+                      <Sprite
+                        sheet={peekSheet}
+                        frame={peekFrame(peek)}
+                        width={PEEK_W}
+                      />
+                    </View>
+                  )}
+                  {focused !== "posting" && (
+                    <>
+                      <View className="min-h-[44px] flex-row items-center justify-between">
+                        <Text style={font(24)} accessibilityRole="header">
+                          1. Your resume
+                        </Text>
+                        {mode === "text" && !typing && (
+                          <PasteButton
+                            label="Paste resume"
+                            onPress={() => pasteInto(setResumeText)}
+                          />
+                        )}
+                      </View>
+                      {!typing && (
+                        <View
+                          className="flex-row"
+                          style={{ borderWidth: 2, borderColor: c.wood }}
+                          accessibilityRole="tablist"
+                        >
+                          {(["pdf", "text"] as const).map((m) => (
+                            <Pressable
+                              key={m}
+                              onPress={() => setMode(m)}
+                              accessibilityRole="tab"
+                              accessibilityState={{ selected: mode === m }}
+                              className="min-h-[44px] flex-1 items-center justify-center"
+                              style={{
+                                backgroundColor: mode === m ? c.wood : c.cream,
+                              }}
+                            >
+                              <Text
+                                style={font(20, mode === m ? c.cream : c.wood)}
+                              >
+                                {m === "pdf" ? "Upload PDF" : "Paste text"}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+
+                      {mode === "pdf" ? (
+                        <Pressable
+                          onPress={pickPdf}
+                          disabled={picking}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            pdf
+                              ? `Resume selected: ${pdf.name}. Tap to choose a different file.`
+                              : "Choose your resume PDF"
+                          }
+                          className="h-24 flex-row items-center gap-3 px-4 active:opacity-80"
+                          style={{
+                            ...field,
+                            borderStyle: pdf ? "solid" : "dashed",
+                            backgroundColor: pdf ? "#E6F2D9" : c.cream,
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name={
+                              pdf ? "file-check-outline" : "file-upload-outline"
+                            }
+                            size={44}
+                            color={pdf ? c.grassDark : c.wood}
+                          />
+                          <View className="flex-1">
+                            <Text numberOfLines={1} style={font(22)}>
+                              {picking
+                                ? "Opening…"
+                                : pdf
+                                  ? pdf.name
+                                  : "Choose a PDF"}
+                            </Text>
+                            <Text style={font(18, c.stoneDark)}>
+                              {pdf ? "Tap to change" : "Up to 5 MB"}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      ) : (
+                        <TextInput
+                          value={resumeText}
+                          onChangeText={typed(setResumeText)}
+                          {...focusProps("resume")}
+                          multiline
+                          textAlignVertical="top"
+                          placeholder="Paste your resume text here"
+                          placeholderTextColor={c.stoneDark}
+                          accessibilityLabel="Resume text"
+                          className={`${focused === "resume" ? "flex-1" : "h-24"} p-3`}
+                          style={{ ...field, ...font(20) }}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {focused !== "resume" && (
+                    <>
+                      <View className="mt-2 flex-row items-center justify-between">
+                        <Text style={font(24)} accessibilityRole="header">
+                          2. The job posting
+                        </Text>
+                        {!typing && (
+                          <PasteButton
+                            label="Paste job posting"
+                            onPress={() => pasteInto(setPosting)}
+                          />
+                        )}
+                      </View>
+                      <TextInput
+                        value={posting}
+                        onChangeText={typed(setPosting)}
+                        {...focusProps("posting")}
+                        multiline
+                        textAlignVertical="top"
+                        placeholder="Paste the full job description"
+                        placeholderTextColor={c.stoneDark}
+                        accessibilityLabel="Job posting text"
+                        className={`${focused === "posting" ? "flex-1" : "h-24"} p-3`}
+                        style={{ ...field, ...font(20) }}
+                      />
+                    </>
+                  )}
+                  {!typing && (
+                    <Text style={font(16, c.stoneDark)}>
+                      Your resume is analyzed once and never stored.
+                    </Text>
+                  )}
+                </View>
+              </Animated.View>
+
+              {error && (
+                <View
+                  className="mt-3 p-3"
+                  style={{
+                    backgroundColor: c.cream,
+                    borderWidth: 3,
+                    borderColor: c.red,
+                  }}
+                  accessibilityRole="alert"
+                >
+                  <Text style={font(20, c.red)}>{error}</Text>
+                </View>
+              )}
+
+              <Animated.View entering={rowIn(continuePlan ? 4 : 3)}>
+                {!typing && (
+                  <>
+                    <Pressable
+                      onPress={build}
+                      disabled={!canBuild}
+                      accessibilityRole="button"
+                      accessibilityLabel="Build my map"
+                      accessibilityHint="Analyzes your resume and the posting, then builds your levels"
+                      accessibilityState={{ disabled: !canBuild }}
+                      className="mt-8"
+                    >
+                      {({ pressed }) => (
+                        <View
+                          className="min-h-[56px] items-center justify-center"
+                          style={{
+                            backgroundColor: canBuild ? c.gold : c.stone,
+                            borderWidth: 4,
+                            borderColor: canBuild ? c.outline : c.stoneDark,
+                            boxShadow:
+                              pressed || !canBuild
+                                ? "none"
+                                : `0 5px 0 ${c.outline}`,
+                            transform: [
+                              { translateY: pressed && canBuild ? 5 : 0 },
+                            ],
+                          }}
+                        >
+                          <Text
+                            style={font(28, canBuild ? c.outline : c.stoneDark)}
+                          >
+                            Build my map
+                          </Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    {!canBuild && (
+                      <Text
+                        className="mt-6 text-center"
+                        style={font(18, c.cream)}
+                      >
+                        {!resumeReady
+                          ? mode === "pdf"
+                            ? "Add your resume PDF"
+                            : "Paste at least a few lines of your resume"
+                          : "Paste the full job posting"}{" "}
+                        to continue.
+                      </Text>
+                    )}
+                    <Pressable
+                      onPress={loadDemo}
+                      disabled={demoLoading}
+                      accessibilityRole="button"
+                      accessibilityLabel="Try the demo plan"
+                      accessibilityState={{ busy: demoLoading }}
+                      className="mt-4 min-h-[44px] items-center justify-center active:opacity-70"
+                    >
+                      <Text
+                        style={{
+                          ...font(20, c.cream),
+                          textDecorationLine: "underline",
+                        }}
+                      >
+                        {demoLoading ? "Loading demo…" : "Try the demo plan"}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+              </Animated.View>
+            </View>
+          )
         )}
-      </SafeAreaView>
+      </PixelBackground>
     </KeyboardAvoidingView>
   );
 }
